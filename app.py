@@ -1,39 +1,36 @@
 import cv2
-import numpy as np
-import time
-import base64
-import os
+import mediapipe as mp
 import math
 import streamlit as st
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, WebRtcMode
 import av
-import mediapipe as mp
+import base64
+import os
+import time
 from streamlit_autorefresh import st_autorefresh
 import streamlit.components.v1 as components
 
 # --- Ρυθμίσεις Σελίδας ---
 st.set_page_config(page_title="SignAI Web Hub", layout="wide")
 
-# --- Πλαϊνό Μενού ---
 st.sidebar.title("SignAI Menu 🚀")
-page = st.sidebar.radio("Select Mode:", ["Recognition Camera", "Avatar Voice Mode"])
+page = st.sidebar.radio("Επίλεξε Λειτουργία:", ["Recognition Camera", "Avatar Voice Mode"])
 
 if "spoken_word" not in st.session_state:
     st.session_state.spoken_word = ""
 
-# --- ΣΥΣΤΗΜΑ ΗΧΟΥ (Προσαρμοσμένο για Streamlit Web) ---
+# --- Ήχος (Διορθωμένο για το Ευχαριστώ) ---
 def play_local_sound(phrase, voice):
     gender = voice.lower()
     sound_map = {
         "καλημέρα": "kalimera",
-        "ευχαριστώ": "efharisto",
+        "ευχαριστώ": "efharisto", 
         "γεια": "geia",
         "καλό μεσημέρι": "kalo_mesimeri",
         "ποιο είναι το όνομά σου": "poio.einai.to.onoma.sou"
     }
     base = sound_map.get(phrase, "")
     if base:
-        # Δοκιμάζει efharisto και efcharisto για σιγουριά
         filenames = [f"{base}.{gender}.wav", f"efcharisto.{gender}.wav"]
         for filename in filenames:
             if os.path.exists(filename):
@@ -45,7 +42,7 @@ def play_local_sound(phrase, voice):
                 break
 
 # ==========================================
-# 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ (ΑΥΘΕΝΤΙΚΟΣ ΚΛΕΙΔΩΜΕΝΟΣ)
+# 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ (Ο ΔΙΚΟΣ ΣΟΥ ΚΛΕΙΔΩΜΕΝΟΣ ΚΩΔΙΚΑΣ)
 # ==========================================
 if page == "Recognition Camera":
     st.title("📷 Live Recognition Mode")
@@ -95,14 +92,12 @@ if page == "Recognition Camera":
                     y_index_tip = lm.landmark[8].y
                     if palm and dist_thumb_pinky > 0.15 and dist_index_middle > 0.03: moutza = True
 
-            # ΙΕΡΑΡΧΙΑ ΚΑΝΟΝΩΝ (ΑΥΣΤΗΡΑ ΔΙΚΗ ΣΟΥ)
             if h_cnt == 1 and y_index_tip < 0.65 and not moutza and not idx: active_now = "καλό μεσημέρι"
             elif h_cnt >= 2: active_now = "ευχαριστώ"
             elif moutza: active_now = "γεια"
             elif idx and h_high: active_now = "καλημέρα"
             elif idx and h_chest: active_now = "ποιο είναι το όνομά σου"
 
-            # ΚΑΤΑΓΡΑΦΗ (1.4 δευτερόλεπτα)
             if active_now:
                 if not self.recording:
                     self.recording = True
@@ -123,7 +118,7 @@ if page == "Recognition Camera":
             cv2.putText(img, f"WORD: {self.current_word}", (20, h-25), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
             return av.VideoFrame.from_ndarray(img, format="bgr24")
 
-    voice_choice = st.radio("Voice Mode:", ["Female", "Male"], horizontal=True)
+    voice_choice = st.radio("Φωνή:", ["Female", "Male"], horizontal=True)
     ctx = webrtc_streamer(key="sign-camera", mode=WebRtcMode.SENDRECV, video_processor_factory=SignLanguageProcessor)
 
     if ctx.state.playing:
@@ -135,28 +130,17 @@ if page == "Recognition Camera":
                 st.session_state.spoken_word = current
 
 # ==========================================
-# 2Η ΣΕΛΙΔΑ: ΑΒΑΤΑΡ (ΑΥΘΕΝΤΙΚΟΣ ΚΛΕΙΔΩΜΕΝΟΣ)
+# 2Η ΣΕΛΙΔΑ: ΑΒΑΤΑΡ (ΜΕΣΩ IFRAME)
 # ==========================================
 else:
     st.title("🤖 Avatar Voice Mode")
-    
-    def get_base64_model(file_path):
-        with open(file_path, "rb") as f:
-            data = f.read()
-        return base64.b64encode(data).decode()
+    st.markdown("Πάτα το κουμπί '🎙️ Ενεργοποίηση' και μίλησε στο Άβαταρ!")
+
+    # Εδώ το Streamlit καλεί απευθείας το site σου που δουλεύει τέλεια
+    URL_TO_GITHUB_PAGES = "https://titanrhea.github.io/avatar-noimatiki/" 
 
     try:
-        rhea_b64 = get_base64_model("updated_model.glb")
-        titan_b64 = get_base64_model("titan.glb")
-        
-        with open("avatar_files/index.html", "r", encoding="utf-8") as f:
-            html_code = f.read()
-        
-        # Αντικατάσταση links με Base64 (ΜΟΝΟ τεχνική αλλαγή)
-        html_code = html_code.replace('value="updated_model.glb"', f'value="data:model/gltf-binary;base64,{rhea_b64}"')
-        html_code = html_code.replace('value="titan.glb"', f'value="data:model/gltf-binary;base64,{titan_b64}"')
-        html_code = html_code.replace("loadAvatar('updated_model.glb')", f"loadAvatar('data:model/gltf-binary;base64,{rhea_b64}')")
-        
-        components.html(html_code, height=900, scrolling=False)
+        # Εμφάνιση του iframe σε μεγάλο μέγεθος για να χωράει άνετα το Άβαταρ
+        components.iframe(URL_TO_GITHUB_PAGES, width=1200, height=850, scrolling=False)
     except Exception as e:
-        st.error(f"Error loading files: {e}")
+        st.error(f"Σφάλμα φόρτωσης Άβαταρ: {e}")
