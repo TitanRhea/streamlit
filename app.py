@@ -2,26 +2,57 @@ import cv2
 import mediapipe as mp
 import math
 import streamlit as st
-from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, WebRtcMode
 import av
+from gtts import gTTS
+import base64
+import time
 
 # --- Ρυθμίσεις Σελίδας ---
 st.set_page_config(page_title="SignAI Web", layout="centered")
 st.title("🚀 SignAI: Python Web Edition")
 st.markdown("Κάνε τις κινήσεις σου αργά και καθαρά μπροστά στην κάμερα.")
 
+# --- Έλεγχος Κατάστασης για τον Ήχο ---
+if "spoken_word" not in st.session_state:
+    st.session_state.spoken_word = ""
+
+# --- Συνάρτηση Αναπαραγωγής Ήχου ---
+def play_sound(text):
+    if text and text != "ΑΝΑΜΟΝΗ..." and text != st.session_state.spoken_word:
+        # Δημιουργία ήχου
+        tts = gTTS(text=text, lang='el')
+        tts.save("temp_voice.mp3")
+        
+        # Μετατροπή σε μορφή που παίζει στον Browser
+        with open("temp_voice.mp3", "rb") as f:
+            data = f.read()
+            b64 = base64.b64encode(data).decode()
+            
+        # Κώδικας HTML για αυτόματο παίξιμο
+        md = f"""
+            <audio autoplay="true">
+            <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+            </audio>
+            """
+        st.markdown(md, unsafe_allow_html=True)
+        st.session_state.spoken_word = text # Θυμάται τι είπε για να μην το ξαναπεί αμέσως
+
 # --- MediaPipe Setup ---
 mp_hands = mp.solutions.hands
 mp_draw = mp.solutions.drawing_utils
+
+# Ένα κρυφό κουτί για να μπαίνει η λέξη
+word_placeholder = st.empty()
 
 # --- Κλάση Επεξεργασίας Βίντεο ---
 class SignLanguageProcessor(VideoProcessorBase):
     def __init__(self):
         self.hands = mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.7)
         self.current_word = "ΑΝΑΜΟΝΗ..."
+        self.last_word_time = time.time()
 
     def recv(self, frame):
-        # Παίρνουμε την εικόνα από την κάμερα του χρήστη
         img = frame.to_ndarray(format="bgr24")
         img = cv2.flip(img, 1)
         h, w, _ = img.shape
@@ -40,7 +71,7 @@ class SignLanguageProcessor(VideoProcessorBase):
             for lm in results.multi_hand_landmarks:
                 mp_draw.draw_landmarks(img, lm, mp_hands.HAND_CONNECTIONS)
                 
-                # ΟΙ ΚΑΝΟΝΕΣ ΣΟΥ ΑΚΡΙΒΩΣ ΟΠΩΣ ΤΟΥΣ ΦΤΙΑΞΑΜΕ
+                # ΟΙ ΚΑΝΟΝΕΣ ΣΟΥ
                 y_wrist = lm.landmark[0].y
                 
                 if y_wrist < 0.50: h_chin = True 
@@ -65,25 +96,41 @@ class SignLanguageProcessor(VideoProcessorBase):
 
         # Η ΙΕΡΑΡΧΙΑ ΣΟΥ
         if h_cnt == 1 and y_index_tip < 0.65 and not moutza and not idx: 
-            active_now = "ΚΑΛΟ ΜΕΣΗΜΕΡΙ"
+            active_now = "καλό μεσημέρι"
         elif h_cnt >= 2: 
-            active_now = "ΕΥΧΑΡΙΣΤΩ"
+            active_now = "ευχαριστώ"
         elif moutza: 
-            active_now = "ΓΕΙΑ"
+            active_now = "γεια"
         elif idx and h_high: 
-            active_now = "ΚΑΛΗΜΕΡΑ"
+            active_now = "καλημέρα"
         elif idx and h_chest: 
-            active_now = "ΟΝΟΜΑ"
+            active_now = "όνομα"
 
-        # Ενημέρωση λέξης
-        if active_now:
+        # Ενημέρωση λέξης (μόνο αν βρήκε κάτι και πέρασε 1 δευτερόλεπτο)
+        if active_now and (time.time() - self.last_word_time > 1):
             self.current_word = active_now
+            self.last_word_time = time.time()
 
-        # Σχεδίαση UI πάνω στο βίντεο
+        # Σχεδίαση UI 
         cv2.rectangle(img, (0, h-70), (w, h), (0, 0, 0), -1)
         cv2.putText(img, f"ΛΕΞΗ: {self.current_word}", (20, h-25), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 # --- Εκκίνηση Κάμερας ---
-webrtc_streamer(key="sign-language-app", video_processor_factory=SignLanguageProcessor)
+ctx = webrtc_streamer(
+    key="sign-language-app", 
+    mode=WebRtcMode.SENDRECV,
+    video_processor_factory=SignLanguageProcessor,
+    rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+)
+
+# Σύστημα που "ακούει" την κάμερα και στέλνει τη φωνή!
+if ctx.video_processor:
+    while True:
+        current = ctx.video_processor.current_word
+        if current != "ΑΝΑΜΟΝΗ...":
+            with word_placeholder:
+                # Εδώ καλούμε τη συνάρτηση που παίζει τον ήχο
+                play_sound(current)
+        time.sleep(0.5)
