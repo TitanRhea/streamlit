@@ -98,7 +98,7 @@
         loader.setDRACOLoader(dracoLoader);
 
         function loadAvatar(file) {
-            const finalPath = file + "?v=" + Date.now();
+            const finalPath = file;
             isTitan = file.includes('titan'); 
             if (currentModel) scene.remove(currentModel);
             bones = { r_fingers: [], l_fingers: [], r_joints: {}, l_joints: {} }; 
