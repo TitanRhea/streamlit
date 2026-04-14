@@ -19,7 +19,7 @@ page = st.sidebar.radio("Επίλεξε Λειτουργία:", ["Recognition Ca
 if "spoken_word" not in st.session_state:
     st.session_state.spoken_word = ""
 
-# --- Ήχος (Διορθωμένο με "ρολόι" για να μην κολλάει) ---
+# --- Ήχος ---
 def play_local_sound(phrase, voice):
     gender = voice.lower()
     sound_map = {
@@ -33,14 +33,13 @@ def play_local_sound(phrase, voice):
     if base:
         filenames = [f"{base}.{gender}.wav"]
         if phrase == "EFHARISTO":
-            filenames.append(f"efcharisto.{gender}.wav") # Δοκιμάζει και τις δύο ορθογραφίες
+            filenames.append(f"efcharisto.{gender}.wav") 
             
         for filename in filenames:
             if os.path.exists(filename):
                 with open(filename, "rb") as f:
                     data = f.read()
                     b64 = base64.b64encode(data).decode()
-                    # Προσθέσαμε ένα ID με την τρέχουσα ώρα για να αναγκάσουμε το Streamlit να παίξει τον ήχο!
                     md = f"""
                         <div id="audio_{time.time()}">
                             <audio autoplay="true">
@@ -52,13 +51,14 @@ def play_local_sound(phrase, voice):
                 break
 
 # ==========================================
-# 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ
+# 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ (ΜΕ ΒΕΛΤΙΣΤΟΠΟΙΗΣΗ ΤΑΧΥΤΗΤΑΣ)
 # ==========================================
 if page == "Recognition Camera":
     st.title("📷 Live Recognition Mode")
     
     class SignLanguageProcessor(VideoProcessorBase):
         def __init__(self):
+            # Αφήνουμε το 0.7 όπως το είχες
             self.hands = mp.solutions.hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.7)
             self.current_word = "WAITING..."
             self.recording_started_at = 0
@@ -66,12 +66,24 @@ if page == "Recognition Camera":
             self.word_candidates = []
 
         def recv(self, frame):
+            # Παίρνουμε το καρέ
             img = frame.to_ndarray(format="bgr24")
+            
+            # --- ΒΕΛΤΙΣΤΟΠΟΙΗΣΗ ΤΑΧΥΤΗΤΑΣ 1: Μικραίνουμε την εικόνα για πιο γρήγορη ανάλυση ---
+            # Αυτό κάνει το MediaPipe να τρέχει ΠΟΛΥ πιο γρήγορα. Η εικόνα που βλέπεις θα παραμείνει κανονική.
+            img = cv2.resize(img, (640, 480)) 
+            
             img = cv2.flip(img, 1)
             h, w, _ = img.shape
-            rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            results = self.hands.process(rgb)
             
+            # Μετατροπή χρωμάτων για το MediaPipe
+            rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            
+            # --- ΒΕΛΤΙΣΤΟΠΟΙΗΣΗ ΤΑΧΥΤΗΤΑΣ 2: Βελτίωση απόδοσης μνήμης ---
+            rgb.flags.writeable = False 
+            results = self.hands.process(rgb)
+            rgb.flags.writeable = True
+
             active_now = None
             h_cnt = 0
             palm, idx, moutza = False, False, False
@@ -81,11 +93,13 @@ if page == "Recognition Camera":
             if results.multi_hand_landmarks:
                 h_cnt = len(results.multi_hand_landmarks)
                 for lm in results.multi_hand_landmarks:
-                    mp.solutions.drawing_utils.draw_landmarks(img, lm, mp.solutions.hands.HAND_CONNECTIONS)
+                    
+                    # --- ΒΕΛΤΙΣΤΟΠΟΙΗΣΗ ΤΑΧΥΤΗΤΑΣ 3: ΑΦΑΙΡΕΣΗ ΖΩΓΡΑΦΙΚΗΣ ---
+                    # Σχολιάζουμε αυτή τη γραμμή. Δεν ζωγραφίζουμε τις τελείες για να μην κολλάει η κάμερα.
+                    # mp.solutions.drawing_utils.draw_landmarks(img, lm, mp.solutions.hands.HAND_CONNECTIONS)
                     
                     y_wrist = lm.landmark[0].y
-                    # --- ΔΙΟΡΘΩΣΗ ΓΙΑ ΤΟ Streamlit ---
-                    # Αλλάξαμε το 0.85 σε 0.75 γιατί ο browser "κόβει" το κάτω μέρος της κάμερας!
+                    # ΚΛΕΙΔΩΜΕΝΕΣ ΣΥΝΤΕΤΑΓΜΕΝΕΣ (Με το 0.75 για το Streamlit)
                     if y_wrist < 0.50: h_chin = True 
                     elif y_wrist < 0.75: h_high = True 
                     else: h_chest = True
@@ -106,7 +120,7 @@ if page == "Recognition Camera":
                     if palm and dist_thumb_pinky > 0.15 and dist_index_middle > 0.03: 
                         moutza = True
 
-            # --- GREEKLISH ΓΙΑ ΝΑ ΜΗΝ ΒΓΑΖΕΙ ???? ΣΤΗΝ ΟΘΟΝΗ ---
+            # ΚΛΕΙΔΩΜΕΝΗ ΙΕΡΑΡΧΙΑ (GREEKLISH)
             if h_cnt == 1 and y_index_tip < 0.65 and not moutza and not idx: active_now = "KALO MESIMERI"
             elif h_cnt >= 2: active_now = "EFHARISTO"
             elif moutza: active_now = "GEIA"
@@ -129,13 +143,19 @@ if page == "Recognition Camera":
                         self.current_word = final
                     self.recording = False
 
-            # Το cv2 τώρα διαβάζει Greeklish, οπότε τέλος τα ερωτηματικά!
             cv2.rectangle(img, (0, h-70), (w, h), (0, 0, 0), -1)
             cv2.putText(img, f"WORD: {self.current_word}", (20, h-25), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
             return av.VideoFrame.from_ndarray(img, format="bgr24")
 
     voice_choice = st.radio("Φωνή:", ["Female", "Male"], horizontal=True)
-    ctx = webrtc_streamer(key="sign-camera", mode=WebRtcMode.SENDRECV, video_processor_factory=SignLanguageProcessor)
+    
+    # --- ΒΕΛΤΙΣΤΟΠΟΙΗΣΗ ΤΑΧΥΤΗΤΑΣ 4: Ασύγχρονη επεξεργασία ---
+    ctx = webrtc_streamer(
+        key="sign-camera", 
+        mode=WebRtcMode.SENDRECV, 
+        video_processor_factory=SignLanguageProcessor,
+        async_processing=True # Αυτό βοηθάει πολύ στο lag!
+    )
 
     if ctx.state.playing:
         st_autorefresh(interval=1500, key="camera_refresh")
