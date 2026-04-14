@@ -13,11 +13,11 @@ import streamlit.components.v1 as components
 # --- Ρυθμίσεις Σελίδας ---
 st.set_page_config(page_title="SignAI Web Hub", layout="wide")
 
-# --- Πλαϊνό Μενού (Sidebar) ---
+# --- Πλαϊνό Μενού ---
 st.sidebar.title("SignAI Menu 🚀")
 page = st.sidebar.radio("Επίλεξε Λειτουργία:", ["Recognition Camera", "Avatar Voice Mode"])
 
-# --- Ήχος ---
+# --- Σύστημα Ήχου ---
 if "spoken_word" not in st.session_state:
     st.session_state.spoken_word = ""
 
@@ -105,7 +105,7 @@ if page == "Recognition Camera":
             cv2.putText(img, f"WORD: {self.current_word}", (20, h-25), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
             return av.VideoFrame.from_ndarray(img, format="bgr24")
 
-    voice_choice = st.radio("Voice Mode:", ["Female", "Male"], horizontal=True)
+    voice_choice = st.radio("Φωνή:", ["Female", "Male"], horizontal=True)
     ctx = webrtc_streamer(key="sign-camera", mode=WebRtcMode.SENDRECV, video_processor_factory=SignLanguageProcessor)
 
     if ctx.state.playing:
@@ -136,8 +136,7 @@ else:
         with open("avatar_files/index.html", "r", encoding="utf-8") as f:
             html_code = f.read()
         
-        # Καθαρή αντικατάσταση των links με τα Base64 δεδομένα
-        # (Σιγουρέψου ότι τα links στο index.html είναι ΑΚΡΙΒΩΣ αυτά)
+        # ΕΔΩ ΓΙΝΕΤΑΙ Η ΑΛΛΑΓΗ ΤΩΝ LINKS ΜΕ ΤΑ ΜΟΝΤΕΛΑ
         old_rhea_link = "https://github.com/TitanRhea/avatar-noimatiki/raw/refs/heads/main/updated_model.glb"
         old_titan_link = "https://github.com/TitanRhea/streamlit/raw/refs/heads/main/avatar_files/titan.glb"
         
