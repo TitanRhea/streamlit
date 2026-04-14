@@ -4,46 +4,46 @@ import math
 import streamlit as st
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, WebRtcMode
 import av
-from gtts import gTTS
 import base64
+import os
 import time
+from streamlit_autorefresh import st_autorefresh
 
 # --- Ρυθμίσεις Σελίδας ---
 st.set_page_config(page_title="SignAI Web", layout="centered")
 st.title("🚀 SignAI: Python Web Edition")
 st.markdown("Κάνε τις κινήσεις σου αργά και καθαρά μπροστά στην κάμερα.")
 
-# --- Έλεγχος Κατάστασης για τον Ήχο ---
+# --- Έλεγχος Κατάστασης ---
 if "spoken_word" not in st.session_state:
     st.session_state.spoken_word = ""
 
-# --- Συνάρτηση Αναπαραγωγής Ήχου ---
-def play_sound(text):
-    if text and text != "ΑΝΑΜΟΝΗ..." and text != st.session_state.spoken_word:
-        # Δημιουργία ήχου
-        tts = gTTS(text=text, lang='el')
-        tts.save("temp_voice.mp3")
-        
-        # Μετατροπή σε μορφή που παίζει στον Browser
-        with open("temp_voice.mp3", "rb") as f:
-            data = f.read()
-            b64 = base64.b64encode(data).decode()
-            
-        # Κώδικας HTML για αυτόματο παίξιμο
-        md = f"""
-            <audio autoplay="true">
-            <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
-            </audio>
-            """
-        st.markdown(md, unsafe_allow_html=True)
-        st.session_state.spoken_word = text # Θυμάται τι είπε για να μην το ξαναπεί αμέσως
+# --- Συνάρτηση Αναπαραγωγής Δικών σου Αρχείων ---
+def play_local_sound(word, voice):
+    sound_map = {
+        "καλημέρα": "kalimera",
+        "ευχαριστώ": "efharisto",
+        "γεια": "geia",
+        "καλό μεσημέρι": "kalo_mesimeri",
+        "όνομα": "poio.einai.to.onoma.sou"
+    }
+    base = sound_map.get(word.lower(), "")
+    if base:
+        filename = f"{base}.{voice.lower()}.wav"
+        if os.path.exists(filename):
+            with open(filename, "rb") as f:
+                data = f.read()
+                b64 = base64.b64encode(data).decode()
+                md = f"""
+                    <audio autoplay="true">
+                    <source src="data:audio/wav;base64,{b64}" type="audio/wav">
+                    </audio>
+                    """
+                st.markdown(md, unsafe_allow_html=True)
 
 # --- MediaPipe Setup ---
 mp_hands = mp.solutions.hands
 mp_draw = mp.solutions.drawing_utils
-
-# Ένα κρυφό κουτί για να μπαίνει η λέξη
-word_placeholder = st.empty()
 
 # --- Κλάση Επεξεργασίας Βίντεο ---
 class SignLanguageProcessor(VideoProcessorBase):
@@ -106,7 +106,7 @@ class SignLanguageProcessor(VideoProcessorBase):
         elif idx and h_chest: 
             active_now = "όνομα"
 
-        # Ενημέρωση λέξης (μόνο αν βρήκε κάτι και πέρασε 1 δευτερόλεπτο)
+        # Ενημέρωση λέξης 
         if active_now and (time.time() - self.last_word_time > 1):
             self.current_word = active_now
             self.last_word_time = time.time()
@@ -117,6 +117,9 @@ class SignLanguageProcessor(VideoProcessorBase):
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
+# --- UI για Φωνή ---
+voice_choice = st.radio("Επίλεξε Φωνή:", ["Female", "Male"], horizontal=True)
+
 # --- Εκκίνηση Κάμερας ---
 ctx = webrtc_streamer(
     key="sign-language-app", 
@@ -125,12 +128,15 @@ ctx = webrtc_streamer(
     rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
 )
 
-# Σύστημα που "ακούει" την κάμερα και στέλνει τη φωνή!
-if ctx.video_processor:
-    while True:
+# --- Το "Μαγικό" για να μην κολλάει ο ήχος ---
+if ctx.state.playing:
+    # Ανανεώνει τη σελίδα στο παρασκήνιο κάθε 1 δευτερόλεπτο
+    st_autorefresh(interval=1000, key="audiorefresh")
+    
+    if ctx.video_processor:
         current = ctx.video_processor.current_word
-        if current != "ΑΝΑΜΟΝΗ...":
-            with word_placeholder:
-                # Εδώ καλούμε τη συνάρτηση που παίζει τον ήχο
-                play_sound(current)
-        time.sleep(0.5)
+        
+        # Αν υπάρχει νέα λέξη, παίζει τον ήχο
+        if current != "ΑΝΑΜΟΝΗ..." and current != st.session_state.spoken_word:
+            play_local_sound(current, voice_choice)
+            st.session_state.spoken_word = current
