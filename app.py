@@ -45,7 +45,7 @@ def play_local_sound(phrase, voice):
                 break
 
 # ==========================================
-# 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ (ΜΕ ΤΗΝ ΤΕΛΕΙΑ ΛΟΓΙΚΗ ΣΟΥ)
+# 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ (ΜΕ 2.5s COOLDOWN)
 # ==========================================
 if page == "Recognition Camera":
     st.title("📷 Live Recognition Mode")
@@ -58,7 +58,7 @@ if page == "Recognition Camera":
             self.recording_started_at = 0
             self.word_candidates = []
             
-            # Μεταβλητές για την οθόνη και τον ήχο (όπως στο τοπικό σου)
+            # Μεταβλητές για την οθόνη και τον ήχο 
             self.current_reading = ""
             self.final_word = "WAITING..."
             self.speak_queue = []
@@ -116,7 +116,7 @@ if page == "Recognition Camera":
             elif idx and h_high: active_now = "KALIMERA"
             elif idx and h_chest: active_now = "ONOMA"
 
-            # ΚΑΤΑΓΡΑΦΗ ΟΠΩΣ ΣΤΟ ΤΟΠΙΚΟ (1.4 δευτερόλεπτα)
+            # ΚΑΤΑΓΡΑΦΗ ΜΕ 2.5 ΔΕΥΤΕΡΟΛΕΠΤΑ
             if active_now:
                 if not self.recording:
                     self.recording = True
@@ -128,7 +128,10 @@ if page == "Recognition Camera":
                     self.current_reading = active_now
 
             if self.recording:
-                if (time.time() - self.recording_started_at) >= 1.4:
+                # ==========================================
+                # ΑΛΛΑΓΗ: Από 1.4 σε 2.5 δευτερόλεπτα
+                # ==========================================
+                if (time.time() - self.recording_started_at) >= 2.5:
                     if self.word_candidates:
                         # Κλείδωμα της λέξης!
                         final = max(set(self.word_candidates), key=self.word_candidates.count)
