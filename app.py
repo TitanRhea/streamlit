@@ -20,24 +20,27 @@ page = st.sidebar.radio("Select Mode:", ["Recognition Camera", "Avatar Voice Mod
 if "spoken_word" not in st.session_state:
     st.session_state.spoken_word = ""
 
-# --- Ήχος για την κάμερα ---
+# --- Ήχος για την κάμερα (ΔΙΟΡΘΩΣΗ ΣΤΟ EFHARISTO) ---
 def play_local_sound(word, voice):
     sound_map = {
         "KALIMERA": "kalimera",
-        "EFHARISTO": "efcharisto",
+        "EFHARISTO": "efcharisto", # Δοκίμασε efcharisto ή efharisto ανάλογα με το αρχείο σου!
         "GEIA": "geia",
         "KALO MESIMERI": "kalo_mesimeri",
         "ONOMA": "poio.einai.to.onoma.sou"
     }
     base = sound_map.get(word, "")
     if base:
-        filename = f"{base}.{voice.lower()}.wav"
-        if os.path.exists(filename):
-            with open(filename, "rb") as f:
-                data = f.read()
-                b64 = base64.b64encode(data).decode()
-                md = f"""<audio autoplay="true"><source src="data:audio/wav;base64,{b64}" type="audio/wav"></audio>"""
-                st.markdown(md, unsafe_allow_html=True)
+        # Δοκιμάζει και τις δύο ορθογραφίες για σιγουριά
+        filenames = [f"{base}.{voice.lower()}.wav", f"efharisto.{voice.lower()}.wav"]
+        for filename in filenames:
+            if os.path.exists(filename):
+                with open(filename, "rb") as f:
+                    data = f.read()
+                    b64 = base64.b64encode(data).decode()
+                    md = f"""<audio autoplay="true"><source src="data:audio/wav;base64,{b64}" type="audio/wav"></audio>"""
+                    st.markdown(md, unsafe_allow_html=True)
+                break
 
 # --- 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ ---
 if page == "Recognition Camera":
@@ -126,14 +129,13 @@ else:
         return base64.b64encode(data).decode()
 
     try:
-        # Μετατροπή των .glb αρχείων σε Base64
         rhea_b64 = get_base64_model("updated_model.glb")
         titan_b64 = get_base64_model("titan.glb")
         
         with open("avatar_files/index.html", "r", encoding="utf-8") as f:
             html_code = f.read()
         
-        # Εδώ κάνουμε την αντικατάσταση των ονομάτων αρχείων με τα δεδομένα Base64
+        # ΑΝΤΙΚΑΤΑΣΤΑΣΗ ΠΟΥ "ΔΙΑΒΑΖΕΙ" ΤΟ ΔΙΚΟ ΣΟΥ INDEX
         html_code = html_code.replace('value="updated_model.glb"', f'value="data:model/gltf-binary;base64,{rhea_b64}"')
         html_code = html_code.replace('value="titan.glb"', f'value="data:model/gltf-binary;base64,{titan_b64}"')
         html_code = html_code.replace("loadAvatar('updated_model.glb')", f"loadAvatar('data:model/gltf-binary;base64,{rhea_b64}')")
