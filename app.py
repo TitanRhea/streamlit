@@ -116,7 +116,7 @@ if page == "Recognition Camera":
             elif idx and h_high: active_now = "KALIMERA"
             elif idx and h_chest: active_now = "ONOMA"
 
-            # ΚΑΤΑΓΡΑΦΗ ΟΠΩΣ ΣΤΟ ΤΟΠΙΚΟ (1.8 δευτερόλεπτα)
+            # ΚΑΤΑΓΡΑΦΗ ΟΠΩΣ ΣΤΟ ΤΟΠΙΚΟ (2.2 δευτερόλεπτα)
             if active_now:
                 if not self.recording:
                     self.recording = True
@@ -128,7 +128,7 @@ if page == "Recognition Camera":
                     self.current_reading = active_now
 
             if self.recording:
-                if (time.time() - self.recording_started_at) >= 1.8:
+                if (time.time() - self.recording_started_at) >= 2.2:
                     if self.word_candidates:
                         # Κλείδωμα της λέξης!
                         final = max(set(self.word_candidates), key=self.word_candidates.count)
