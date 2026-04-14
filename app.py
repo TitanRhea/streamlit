@@ -13,26 +13,29 @@ import streamlit.components.v1 as components
 # --- Ρυθμίσεις Σελίδας ---
 st.set_page_config(page_title="SignAI Web Hub", layout="wide")
 
-# --- Πλαϊνό Μενού ---
 st.sidebar.title("SignAI Menu 🚀")
 page = st.sidebar.radio("Select Mode:", ["Recognition Camera", "Avatar Voice Mode"])
 
 if "spoken_word" not in st.session_state:
     st.session_state.spoken_word = ""
 
-# --- Ήχος για την κάμερα (ΔΙΟΡΘΩΣΗ ΣΤΟ EFHARISTO) ---
+# --- ΔΙΟΡΘΩΣΗ ΗΧΟΥ (ΕΥΧΑΡΙΣΤΩ) ---
 def play_local_sound(word, voice):
     sound_map = {
         "KALIMERA": "kalimera",
-        "EFHARISTO": "efcharisto", # Δοκίμασε efcharisto ή efharisto ανάλογα με το αρχείο σου!
+        "EFHARISTO": "efharisto", # Ψάχνει το efharisto.wav
         "GEIA": "geia",
         "KALO MESIMERI": "kalo_mesimeri",
         "ONOMA": "poio.einai.to.onoma.sou"
     }
     base = sound_map.get(word, "")
     if base:
-        # Δοκιμάζει και τις δύο ορθογραφίες για σιγουριά
-        filenames = [f"{base}.{voice.lower()}.wav", f"efharisto.{voice.lower()}.wav"]
+        # Δοκιμάζει όλους τους πιθανούς συνδυασμούς για σιγουριά
+        filenames = [
+            f"{base}.{voice.lower()}.wav", 
+            f"efharisto.{voice.lower()}.wav",
+            f"efcharisto.{voice.lower()}.wav"
+        ]
         for filename in filenames:
             if os.path.exists(filename):
                 with open(filename, "rb") as f:
@@ -131,11 +134,10 @@ else:
     try:
         rhea_b64 = get_base64_model("updated_model.glb")
         titan_b64 = get_base64_model("titan.glb")
-        
         with open("avatar_files/index.html", "r", encoding="utf-8") as f:
             html_code = f.read()
         
-        # ΑΝΤΙΚΑΤΑΣΤΑΣΗ ΠΟΥ "ΔΙΑΒΑΖΕΙ" ΤΟ ΔΙΚΟ ΣΟΥ INDEX
+        # Καθαρή αντικατάσταση Base64
         html_code = html_code.replace('value="updated_model.glb"', f'value="data:model/gltf-binary;base64,{rhea_b64}"')
         html_code = html_code.replace('value="titan.glb"', f'value="data:model/gltf-binary;base64,{titan_b64}"')
         html_code = html_code.replace("loadAvatar('updated_model.glb')", f"loadAvatar('data:model/gltf-binary;base64,{rhea_b64}')")
