@@ -34,10 +34,7 @@ def play_local_sound(phrase, voice):
     }
     base = sound_map.get(phrase, "")
     if base:
-        filenames = [f"{base}.{gender}.wav"]
-        if phrase == "EFHARISTO":
-            filenames.append(f"efcharisto.{gender}.wav") 
-            
+        filenames = [f"{base}.{gender}.wav", f"efcharisto.{gender}.wav", f"efharisto.{gender}.wav"]
         for filename in filenames:
             if os.path.exists(filename):
                 with open(filename, "rb") as f:
@@ -54,7 +51,7 @@ def play_local_sound(phrase, voice):
                 break
 
 # ==========================================
-# 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ (ΚΑΘΑΡΗ ΟΘΟΝΗ & ΣΩΣΤΗ ΟΥΡΑ)
+# 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ (ΜΕ ΒΕΛΤΙΣΤΟΠΟΙΗΜΕΝΟΥΣ ΧΡΟΝΟΥΣ)
 # ==========================================
 if page == "Recognition Camera":
     st.title("📷 Live Recognition Mode")
@@ -65,12 +62,10 @@ if page == "Recognition Camera":
             self.recording = False
             self.recording_started_at = 0
             self.word_candidates = []
-            self.speak_queue = [] # Εδώ μαζεύονται οι λέξεις
+            self.speak_queue = [] 
 
         def recv(self, frame):
             img = frame.to_ndarray(format="bgr24")
-            
-            # Μικραίνουμε την εικόνα μόνο για ταχύτητα
             img = cv2.resize(img, (640, 480)) 
             img = cv2.flip(img, 1)
             
@@ -89,7 +84,6 @@ if page == "Recognition Camera":
                 h_cnt = len(results.multi_hand_landmarks)
                 for lm in results.multi_hand_landmarks:
                     y_wrist = lm.landmark[0].y
-                    # Επανέφερα το 0.85 σου γιατί τώρα που "ξελάφρωσε" η κάμερα, θα πιάνει άνετα το στήθος
                     if y_wrist < 0.50: h_chin = True 
                     elif y_wrist < 0.85: h_high = True 
                     else: h_chest = True
@@ -125,14 +119,13 @@ if page == "Recognition Camera":
                     self.word_candidates.append(active_now)
 
             if self.recording:
-                # Ο χρόνος καταγραφής (2.5 δευτερόλεπτα)
-                if (time.time() - self.recording_started_at) >= 2.5:
+                # --- ΔΙΟΡΘΩΣΗ 1: Χρόνος καταγραφής στα 3.5 δευτερόλεπτα ---
+                if (time.time() - self.recording_started_at) >= 3.5:
                     if self.word_candidates:
                         final = max(set(self.word_candidates), key=self.word_candidates.count)
-                        self.speak_queue.append(final) # Προσθήκη στην ουρά
+                        self.speak_queue.append(final) 
                     self.recording = False
 
-            # Όπως ζήτησες, ΑΦΑΙΡΕΘΗΚΑΝ ΕΝΤΕΛΩΣ τα γράμματα από την οθόνη (cv2.putText)
             return av.VideoFrame.from_ndarray(img, format="bgr24")
 
     voice_choice = st.radio("Φωνή:", ["Female", "Male"], horizontal=True)
@@ -145,21 +138,18 @@ if page == "Recognition Camera":
     )
 
     if ctx.state.playing:
-        st_autorefresh(interval=1000, key="camera_refresh") 
+        st_autorefresh(interval=800, key="camera_refresh") # Πιο συχνό refresh για καλύτερη απόκριση
         if ctx.video_processor:
-            # ==========================================
-            # ΕΔΩ ΛΥΝΕΤΑΙ Η ΟΥΡΑ: Ο "ΤΡΟΧΟΝΟΜΟΣ" ΤΟΥ ΗΧΟΥ
-            # ==========================================
             if len(ctx.video_processor.speak_queue) > 0:
                 now = time.time()
-                # Αφήνει να περάσουν 3.0 δευτερόλεπτα πριν παίξει το επόμενο, για να προλάβει να ακουστεί το προηγούμενο!
-                if now - st.session_state.last_audio_played > 3.0: 
+                # --- ΔΙΟΡΘΩΣΗ 2: Αναμονή μεταξύ λέξεων στα 1.8 δευτερόλεπτα ---
+                if now - st.session_state.last_audio_played > 1.8: 
                     word_to_speak = ctx.video_processor.speak_queue.pop(0)
                     play_local_sound(word_to_speak, voice_choice)
                     st.session_state.last_audio_played = now
 
 # ==========================================
-# 2Η ΣΕΛΙΔΑ: ΑΒΑΤΑΡ
+# 2Η ΣΕΛΙΔΑ: ΑΒΑΤΑΡ (ΚΛΕΙΔΩΜΕΝΟ)
 # ==========================================
 else:
     st.title("🤖 Avatar Voice Mode")
