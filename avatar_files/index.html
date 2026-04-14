@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Avatar - Final Flow </title>
+    <title>Web Avatar - Final Flow</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #f0e6dc; font-family: 'Segoe UI', sans-serif; }
         #canvas-container { width: 100vw; height: 100vh; display: block; }
@@ -70,7 +70,6 @@
         let isTitan = false; 
         const deg = (d) => d * (Math.PI / 180);
         const basePose = { x: 54, y: 30, z: 17 };
-        const VOWEL_OPEN = { 'α': 115, 'ε': 105, 'η': 105, 'ι': 100, 'ο': 110, 'υ': 100, 'ω': 110 };
 
         let gestureQueue = [];
         let idleTimer = null; 
@@ -281,6 +280,7 @@
             }, 1000); 
         }
 
+        // ΕΔΩ ΕΙΝΑΙ Η ΑΥΘΕΝΤΙΚΗ ΣΟΥ ΣΥΝΑΡΤΗΣΗ ΓΙΑ ΤΟ ΚΑΛΟ ΜΕΣΗΜΕΡΙ (ΑΚΡΙΒΩΣ ΟΠΩΣ ΤΗΝ ΕΙΧΕΣ)
         function gesture_mesimeri() {
             is_busy = true; clearFingers(); 
             if(bones.jaw) {
