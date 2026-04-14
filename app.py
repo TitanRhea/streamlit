@@ -10,14 +10,11 @@ import time
 from streamlit_autorefresh import st_autorefresh
 import streamlit.components.v1 as components
 
-# --- Ρυθμίσεις Σελίδας ---
 st.set_page_config(page_title="SignAI Web Hub", layout="wide")
 
-# --- Πλαϊνό Μενού ---
 st.sidebar.title("SignAI Menu 🚀")
 page = st.sidebar.radio("Επίλεξε Λειτουργία:", ["Recognition Camera", "Avatar Voice Mode"])
 
-# --- Σύστημα Ήχου ---
 if "spoken_word" not in st.session_state:
     st.session_state.spoken_word = ""
 
@@ -39,9 +36,6 @@ def play_local_sound(word, voice):
                 md = f"""<audio autoplay="true"><source src="data:audio/wav;base64,{b64}" type="audio/wav"></audio>"""
                 st.markdown(md, unsafe_allow_html=True)
 
-# ==========================================
-# 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ
-# ==========================================
 if page == "Recognition Camera":
     st.title("📷 Live Recognition Mode")
     
@@ -117,9 +111,6 @@ if page == "Recognition Camera":
                 play_local_sound(current, voice_choice)
                 st.session_state.spoken_word = current
 
-# ==========================================
-# 2Η ΣΕΛΙΔΑ: ΑΒΑΤΑΡ
-# ==========================================
 else:
     st.title("🤖 Avatar Voice Mode")
     st.markdown("Πάτα το κουμπί '🎙️ Ενεργοποίηση' και μίλησε στο Άβαταρ!")
@@ -136,7 +127,7 @@ else:
         with open("avatar_files/index.html", "r", encoding="utf-8") as f:
             html_code = f.read()
         
-        # ΕΔΩ ΓΙΝΕΤΑΙ Η ΑΛΛΑΓΗ ΤΩΝ LINKS ΜΕ ΤΑ ΜΟΝΤΕΛΑ
+        # ΑΝΤΙΚΑΤΑΣΤΑΣΗ LINKS ΜΕ BASE64 ΔΕΔΟΜΕΝΑ
         old_rhea_link = "https://github.com/TitanRhea/avatar-noimatiki/raw/refs/heads/main/updated_model.glb"
         old_titan_link = "https://github.com/TitanRhea/streamlit/raw/refs/heads/main/avatar_files/titan.glb"
         
