@@ -12,7 +12,7 @@ from streamlit_autorefresh import st_autorefresh
 # --- Ρυθμίσεις Σελίδας ---
 st.set_page_config(page_title="SignAI Web", layout="centered")
 st.title("🚀 SignAI: Python Web Edition")
-st.markdown("Κάνε τις κινήσεις σου αργά και καθαρά μπροστά στην κάμερα.")
+st.markdown("Κάνε τις κινήσεις σου μπροστά στην κάμερα. Το σύστημα τώρα αντιδρά πιο γρήγορα!")
 
 # --- Έλεγχος Κατάστασης ---
 if "spoken_word" not in st.session_state:
@@ -48,7 +48,8 @@ mp_draw = mp.solutions.drawing_utils
 # --- Κλάση Επεξεργασίας Βίντεο ---
 class SignLanguageProcessor(VideoProcessorBase):
     def __init__(self):
-        self.hands = mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.7)
+        # Βάλαμε 0.5 για να πιάνει πιο εύκολα τα δύο χέρια στο "Ευχαριστώ"
+        self.hands = mp_hands.Hands(min_detection_confidence=0.5, min_tracking_confidence=0.5)
         self.current_word = "ΑΝΑΜΟΝΗ..."
         self.last_word_time = time.time()
 
@@ -106,10 +107,17 @@ class SignLanguageProcessor(VideoProcessorBase):
         elif idx and h_chest: 
             active_now = "όνομα"
 
-        # Ενημέρωση λέξης 
-        if active_now and (time.time() - self.last_word_time > 1):
-            self.current_word = active_now
-            self.last_word_time = time.time()
+        # ΛΟΓΙΚΗ ΤΑΧΥΤΗΤΑΣ & ΚΑΘΑΡΙΣΜΟΥ
+        if active_now:
+            # Χρειάζεται μόνο 0.5 δευτερόλεπτα για να καταλάβει τη λέξη
+            if time.time() - self.last_word_time > 0.5:
+                self.current_word = active_now
+                self.last_word_time = time.time()
+        else:
+            # Αν δεν κάνεις καμία κίνηση για 2 δευτερόλεπτα, μηδενίζει
+            if time.time() - self.last_word_time > 2.0:
+                self.current_word = "ΑΝΑΜΟΝΗ..."
+                self.last_word_time = time.time()
 
         # Σχεδίαση UI 
         cv2.rectangle(img, (0, h-70), (w, h), (0, 0, 0), -1)
@@ -128,15 +136,19 @@ ctx = webrtc_streamer(
     rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
 )
 
-# --- Το "Μαγικό" για να μην κολλάει ο ήχος ---
+# --- Το "Μαγικό" για να μην κολλάει ο ήχος (ΠΙΟ ΓΡΗΓΟΡΟ) ---
 if ctx.state.playing:
-    # Ανανεώνει τη σελίδα στο παρασκήνιο κάθε 1 δευτερόλεπτο
-    st_autorefresh(interval=1000, key="audiorefresh")
+    # Ανανεώνει τη σελίδα κάθε ΜΙΣΟ δευτερόλεπτο (500) αντί για ένα ολόκληρο
+    st_autorefresh(interval=500, key="audiorefresh")
     
     if ctx.video_processor:
         current = ctx.video_processor.current_word
         
+        # Αν η λέξη μηδενιστεί, ελευθερώνει τη μνήμη για να μπορεί να ξαναπεί την ίδια
+        if current == "ΑΝΑΜΟΝΗ...":
+            st.session_state.spoken_word = ""
+            
         # Αν υπάρχει νέα λέξη, παίζει τον ήχο
-        if current != "ΑΝΑΜΟΝΗ..." and current != st.session_state.spoken_word:
+        elif current != "ΑΝΑΜΟΝΗ..." and current != st.session_state.spoken_word:
             play_local_sound(current, voice_choice)
             st.session_state.spoken_word = current
