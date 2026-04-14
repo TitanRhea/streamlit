@@ -37,11 +37,7 @@ def play_local_sound(word, voice):
             with open(filename, "rb") as f:
                 data = f.read()
                 b64 = base64.b64encode(data).decode()
-                md = f"""
-                    <audio autoplay="true">
-                    <source src="data:audio/wav;base64,{b64}" type="audio/wav">
-                    </audio>
-                    """
+                md = f"""<audio autoplay="true"><source src="data:audio/wav;base64,{b64}" type="audio/wav"></audio>"""
                 st.markdown(md, unsafe_allow_html=True)
 
 # ==========================================
@@ -52,7 +48,7 @@ if page == "Recognition Camera":
     
     class SignLanguageProcessor(VideoProcessorBase):
         def __init__(self):
-            self.hands = mp.solutions.hands.Hands(min_detection_confidence=0.4, min_tracking_confidence=0.4)
+            self.hands = mp_hands = mp.solutions.hands.Hands(min_detection_confidence=0.4, min_tracking_confidence=0.4)
             self.current_word = "WAITING..."
             self.last_word_time = time.time()
             self.start_time = time.time()
@@ -74,34 +70,28 @@ if page == "Recognition Camera":
             if results.multi_hand_landmarks:
                 h_cnt = len(results.multi_hand_landmarks)
                 for lm in results.multi_hand_landmarks:
-                    # Logic για τους κανόνες σου
                     y_wrist = lm.landmark[0].y
                     if y_wrist < 0.50: h_chin = True 
                     elif y_wrist < 0.85: h_high = True
                     else: h_chest = True
-
                     up = 0
                     if lm.landmark[8].y < lm.landmark[6].y: up += 1
                     if lm.landmark[12].y < lm.landmark[10].y: up += 1
                     if lm.landmark[16].y < lm.landmark[14].y: up += 1
                     if lm.landmark[20].y < lm.landmark[18].y: up += 1
-                    
                     if up >= 3: palm = True
                     elif up == 1: idx = True
-
                     dist_thumb_pinky = math.hypot(lm.landmark[4].x - lm.landmark[20].x, lm.landmark[4].y - lm.landmark[20].y)
                     dist_index_middle = math.hypot(lm.landmark[8].x - lm.landmark[12].x, lm.landmark[8].y - lm.landmark[12].y)
                     y_index_tip = lm.landmark[8].y
                     if palm and dist_thumb_pinky > 0.15 and dist_index_middle > 0.03: moutza = True
 
-            # Ιεραρχία Κανόνων
             if h_cnt == 1 and y_index_tip < 0.65 and not moutza and not idx: active_now = "KALO MESIMERI"
             elif h_cnt >= 2: active_now = "EFHARISTO"
             elif moutza: active_now = "GEIA"
             elif idx and h_high: active_now = "KALIMERA"
             elif idx and h_chest: active_now = "ONOMA"
 
-            # Ελαστικός Εγκέφαλος
             if time.time() - self.start_time > 2.0:
                 self.history.append(active_now)
                 if len(self.history) > 6: self.history.pop(0)
@@ -109,28 +99,20 @@ if page == "Recognition Camera":
                     self.current_word = active_now
                     self.last_word_time = time.time()
                 elif self.history.count(None) >= 4:
-                    if time.time() - self.last_word_time > 1.2:
-                        self.current_word = "WAITING..."
+                    if time.time() - self.last_word_time > 1.2: self.current_word = "WAITING..."
 
             cv2.rectangle(img, (0, h-70), (w, h), (0, 0, 0), -1)
             cv2.putText(img, f"WORD: {self.current_word}", (20, h-25), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
             return av.VideoFrame.from_ndarray(img, format="bgr24")
 
     voice_choice = st.radio("Voice Mode:", ["Female", "Male"], horizontal=True)
-    
-    ctx = webrtc_streamer(
-        key="sign-camera", 
-        mode=WebRtcMode.SENDRECV,
-        video_processor_factory=SignLanguageProcessor,
-        rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-    )
+    ctx = webrtc_streamer(key="sign-camera", mode=WebRtcMode.SENDRECV, video_processor_factory=SignLanguageProcessor)
 
     if ctx.state.playing:
         st_autorefresh(interval=1500, key="camera_refresh")
         if ctx.video_processor:
             current = ctx.video_processor.current_word
-            if current == "WAITING...":
-                st.session_state.spoken_word = ""
+            if current == "WAITING...": st.session_state.spoken_word = ""
             elif current != "WAITING..." and current != st.session_state.spoken_word:
                 play_local_sound(current, voice_choice)
                 st.session_state.spoken_word = current
@@ -140,15 +122,32 @@ if page == "Recognition Camera":
 # ==========================================
 else:
     st.title("🤖 Avatar Voice Mode")
-    st.markdown("Πάτα το κουμπί στο κάτω μέρος για να ξεκινήσει το Άβαταρ!")
+    st.markdown("Πάτα το κουμπί '🎙️ Ενεργοποίηση' και μίλησε στο Άβαταρ!")
+
+    # Λειτουργία μετατροπής αρχείου σε Base64
+    def get_base64_model(file_path):
+        with open(file_path, "rb") as f:
+            data = f.read()
+        return base64.b64encode(data).decode()
 
     try:
-        html_path = "avatar_files/index.html"
-        if os.path.exists(html_path):
-            with open(html_path, "r", encoding="utf-8") as f:
-                avatar_html = f.read()
-            components.html(avatar_html, height=850, scrolling=False)
-        else:
-            st.error("Missing 'index.html' inside 'avatar_files' folder.")
+        # Φορτώνουμε τα μοντέλα από το κεντρικό repository
+        rhea_b64 = get_base64_model("updated_model.glb")
+        titan_b64 = get_base64_model("titan.glb")
+        
+        # Διαβάζουμε το index.html
+        with open("avatar_files/index.html", "r", encoding="utf-8") as f:
+            html_code = f.read()
+        
+        # ΑΝΤΙΚΑΤΑΣΤΑΣΗ: Βάζουμε τα δεδομένα απευθείας στον κώδικα HTML
+        # Ψάχνουμε τα links που είχαμε βάλει πριν και τα αλλάζουμε με τα Base64 δεδομένα
+        old_rhea_link = "https://github.com/TitanRhea/avatar-noimatiki/raw/refs/heads/main/updated_model.glb"
+        old_titan_link = "https://github.com/TitanRhea/streamlit/raw/refs/heads/main/avatar_files/titan.glb"
+        
+        html_code = html_code.replace(old_rhea_link, f"data:model/gltf-binary;base64,{rhea_b64}")
+        html_code = html_code.replace(old_titan_link, f"data:model/gltf-binary;base64,{titan_b64}")
+        
+        # Προβολή
+        components.html(html_code, height=850, scrolling=False)
     except Exception as e:
-        st.error(f"Error loading avatar: {e}")
+        st.error(f"Error loading files: {e}. Σιγουρέψου ότι τα .glb είναι δίπλα στο app.py")
