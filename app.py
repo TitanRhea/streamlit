@@ -10,14 +10,17 @@ import time
 from streamlit_autorefresh import st_autorefresh
 import streamlit.components.v1 as components
 
+# --- Ρυθμίσεις Σελίδας ---
 st.set_page_config(page_title="SignAI Web Hub", layout="wide")
 
+# --- Πλαϊνό Μενού ---
 st.sidebar.title("SignAI Menu 🚀")
-page = st.sidebar.radio("Επίλεξε Λειτουργία:", ["Recognition Camera", "Avatar Voice Mode"])
+page = st.sidebar.radio("Select Mode:", ["Recognition Camera", "Avatar Voice Mode"])
 
 if "spoken_word" not in st.session_state:
     st.session_state.spoken_word = ""
 
+# --- Ήχος για την κάμερα ---
 def play_local_sound(word, voice):
     sound_map = {
         "KALIMERA": "kalimera",
@@ -36,6 +39,7 @@ def play_local_sound(word, voice):
                 md = f"""<audio autoplay="true"><source src="data:audio/wav;base64,{b64}" type="audio/wav"></audio>"""
                 st.markdown(md, unsafe_allow_html=True)
 
+# --- 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ ---
 if page == "Recognition Camera":
     st.title("📷 Live Recognition Mode")
     
@@ -99,7 +103,7 @@ if page == "Recognition Camera":
             cv2.putText(img, f"WORD: {self.current_word}", (20, h-25), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
             return av.VideoFrame.from_ndarray(img, format="bgr24")
 
-    voice_choice = st.radio("Φωνή:", ["Female", "Male"], horizontal=True)
+    voice_choice = st.radio("Voice:", ["Female", "Male"], horizontal=True)
     ctx = webrtc_streamer(key="sign-camera", mode=WebRtcMode.SENDRECV, video_processor_factory=SignLanguageProcessor)
 
     if ctx.state.playing:
@@ -111,6 +115,7 @@ if page == "Recognition Camera":
                 play_local_sound(current, voice_choice)
                 st.session_state.spoken_word = current
 
+# --- 2Η ΣΕΛΙΔΑ: ΑΒΑΤΑΡ ---
 else:
     st.title("🤖 Avatar Voice Mode")
     st.markdown("Πάτα το κουμπί '🎙️ Ενεργοποίηση' και μίλησε στο Άβαταρ!")
@@ -121,18 +126,17 @@ else:
         return base64.b64encode(data).decode()
 
     try:
+        # Μετατροπή των .glb αρχείων σε Base64
         rhea_b64 = get_base64_model("updated_model.glb")
         titan_b64 = get_base64_model("titan.glb")
         
         with open("avatar_files/index.html", "r", encoding="utf-8") as f:
             html_code = f.read()
         
-        # ΑΝΤΙΚΑΤΑΣΤΑΣΗ LINKS ΜΕ BASE64 ΔΕΔΟΜΕΝΑ
-        old_rhea_link = "https://github.com/TitanRhea/avatar-noimatiki/raw/refs/heads/main/updated_model.glb"
-        old_titan_link = "https://github.com/TitanRhea/streamlit/raw/refs/heads/main/avatar_files/titan.glb"
-        
-        html_code = html_code.replace(old_rhea_link, f"data:model/gltf-binary;base64,{rhea_b64}")
-        html_code = html_code.replace(old_titan_link, f"data:model/gltf-binary;base64,{titan_b64}")
+        # Εδώ κάνουμε την αντικατάσταση των ονομάτων αρχείων με τα δεδομένα Base64
+        html_code = html_code.replace('value="updated_model.glb"', f'value="data:model/gltf-binary;base64,{rhea_b64}"')
+        html_code = html_code.replace('value="titan.glb"', f'value="data:model/gltf-binary;base64,{titan_b64}"')
+        html_code = html_code.replace("loadAvatar('updated_model.glb')", f"loadAvatar('data:model/gltf-binary;base64,{rhea_b64}')")
         
         components.html(html_code, height=900, scrolling=False)
     except Exception as e:
