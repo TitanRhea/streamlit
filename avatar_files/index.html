@@ -98,7 +98,6 @@
         loader.setDRACOLoader(dracoLoader);
 
         function loadAvatar(file) {
-            // Εδώ η αλλαγή για να δέχεται Base64 χωρίς ?v=
             const finalPath = file; 
             isTitan = file.includes('titan'); 
             if (currentModel) scene.remove(currentModel);
@@ -262,8 +261,8 @@
             customKalimeraPart2('r', 0.3); 
 
             setTimeout(() => {
-                if(bones.r_shoulder) gsap.to(bones.r_shoulder.rotation, { x: deg(25), y: deg(7), z: deg(-51), duration: 0.5 });
-                if(bones.l_shoulder) gsap.to(bones.l_shoulder.rotation, { x: deg(25), y: deg(-7), z: deg(51), duration: 0.5 });
+                if(bones.r_shoulder) gsap.to(bones.r_shoulder.rotation, { x: deg(40), y: deg(7), z: deg(-51), duration: 0.5 });
+                if(bones.l_shoulder) gsap.to(bones.l_shoulder.rotation, { x: deg(40), y: deg(-7), z: deg(51), duration: 0.5 });
                 customKalimeraPart2('l', 0.5); 
                 let s = Date.now();
                 const d = () => {
@@ -281,8 +280,8 @@
 
         function gesture_mesimeri() {
             is_busy = true; clearFingers(); 
-            // ΧΑΜΗΛΩΣΑΜΕ ΤΟ x ΓΙΑ ΝΑ ΠΑΕΙ ΣΤΟ ΠΗΓΟΥΝΙ
-            let sh_s = isTitan ? { x: deg(45), y: deg(14), z: deg(-25) } : { x: deg(50), y: deg(14), z: deg(-17) };
+            // ΧΑΜΗΛΩΣΑΜΕ ΤΟ x ΓΙΑ ΝΑ ΠΑΕΙ ΣΤΟ ΠΗΓΟΥΝΙ (ΕΙΔΙΚΑ ΓΙΑ ΤΟΝ TITAN)
+            let sh_s = isTitan ? { x: deg(40), y: deg(14), z: deg(-25) } : { x: deg(50), y: deg(14), z: deg(-17) };
             let el_s = isTitan ? { x: deg(85), y: deg(-31), z: deg(-85) } : { x: deg(95), y: deg(-31), z: deg(-69) };
             if(bones.r_shoulder) gsap.to(bones.r_shoulder.rotation, { x: sh_s.x, y: sh_s.y, z: sh_s.z, duration: 0.5 });
             if(bones.r_elbow) gsap.to(bones.r_elbow.rotation, { x: el_s.x, y: el_s.y, z: el_s.z, duration: 0.5 });
@@ -353,9 +352,7 @@
             }
         };
 
-        // ΕΔΩ ΒΑΖΕΙΣ ΤΟ LINK ΤΗΣ RHEA ΓΙΑ ΤΗΝ ΑΡΧΗ
         loadAvatar('https://github.com/TitanRhea/avatar-noimatiki/raw/refs/heads/main/updated_model.glb');
-        
         function animate() { requestAnimationFrame(animate); renderer.render(scene, camera); }
         animate();
 
