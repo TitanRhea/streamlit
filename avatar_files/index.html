@@ -98,7 +98,7 @@
         loader.setDRACOLoader(dracoLoader);
 
         function loadAvatar(file) {
-            const finalPath = file;
+            const finalPath = file; // Αφαίρεση του ?v= για Base64 συμβατότητα
             isTitan = file.includes('titan'); 
             if (currentModel) scene.remove(currentModel);
             bones = { r_fingers: [], l_fingers: [], r_joints: {}, l_joints: {} }; 
@@ -220,10 +220,13 @@
             is_busy = true; 
             if(bones.jaw) {
                 const tl = gsap.timeline();
-                tl.to(bones.jaw.rotation, { x: deg(115), duration: 0.2 }).to(bones.jaw.rotation, { x: deg(94), duration: 0.2 }).to(bones.jaw.rotation, { x: deg(100), duration: 0.2 }).to(bones.jaw.rotation, { x: deg(115), duration: 0.25 }).to(bones.jaw.rotation, { x: deg(90), duration: 0.2 }); 
+                tl.to(bones.jaw.rotation, { x: deg(115), duration: 0.2 }).to(bones.jaw.rotation, { x: deg(90), duration: 0.2 }); 
             }
             if(bones.r_shoulder) gsap.to(bones.r_shoulder.rotation, { x: deg(70), y: deg(14), z: deg(-17), duration: 0.5 });
             if(bones.r_elbow) gsap.to(bones.r_elbow.rotation, { x: deg(108), y: deg(-31), z: deg(-69), duration: 0.5 });
+            
+            if(bones.r_wrist) gsap.to(bones.r_wrist.rotation, { x: 0, y: deg(-140), z: 0, duration: 0.4 });
+
             setTimeout(() => {
                 customKalimeraPart2('r', 0.3); 
                 const idxBones = [bones.r_joints['index1'], bones.r_joints['index2'], bones.r_joints['index3']].filter(b=>b);
@@ -238,22 +241,22 @@
             is_busy = true; clearFingers(); 
             if(bones.jaw) {
                 const tl = gsap.timeline();
-                tl.to(bones.jaw.rotation, { x: deg(108), duration: 0.3 }).to(bones.jaw.rotation, { x: deg(108), duration: 0.3 }).to(bones.jaw.rotation, { x: deg(115), duration: 0.4 }).to(bones.jaw.rotation, { x: deg(90), duration: 0.2 }); 
+                tl.to(bones.jaw.rotation, { x: deg(108), duration: 0.3 }).to(bones.jaw.rotation, { x: deg(115), duration: 0.4 }).to(bones.jaw.rotation, { x: deg(90), duration: 0.2 }); 
             }
-            if(bones.r_shoulder) gsap.to(bones.r_shoulder.rotation, { x: deg(50), y: deg(-15), z: deg(-70), duration: 0.5 });
+            if(bones.r_shoulder) gsap.to(bones.r_shoulder.rotation, { x: deg(85), y: deg(-15), z: deg(-70), duration: 0.5 });
             if(bones.r_elbow) gsap.to(bones.r_elbow.rotation, { x: deg(-9), y: deg(32), z: deg(-10), duration: 0.5 });
             customKalimeraPart2('r', 0.3); 
             setTimeout(() => {
-                if(bones.r_shoulder) gsap.to(bones.r_shoulder.rotation, { x: deg(25), y: deg(7), z: deg(-51), duration: 0.5 });
-                if(bones.l_shoulder) gsap.to(bones.l_shoulder.rotation, { x: deg(25), y: deg(-7), z: deg(51), duration: 0.5 });
+                if(bones.r_shoulder) gsap.to(bones.r_shoulder.rotation, { x: deg(45), y: deg(7), z: deg(-51), duration: 0.5 });
+                if(bones.l_shoulder) gsap.to(bones.l_shoulder.rotation, { x: deg(45), y: deg(-7), z: deg(51), duration: 0.5 });
                 customKalimeraPart2('l', 0.5); 
                 let s = Date.now();
                 const d = () => {
                     let el = (Date.now() - s) / 1000;
                     if (el < 3.2) {
                         const r = 0.35; 
-                        if(bones.r_wrist) { bones.r_wrist.rotation.x = Math.sin(el * 11) * r; bones.r_wrist.rotation.y = Math.cos(el * 11) * r; }
-                        if(bones.l_wrist) { bones.l_wrist.rotation.x = Math.sin(el * 11) * r; bones.l_wrist.rotation.y = -Math.cos(el * 11) * r; }
+                        if(bones.r_wrist) { bones.r_wrist.rotation.x = Math.sin(el * 11) * r; bones.r_wrist.rotation.y = Math.cos(el * 11) * r; bones.r_wrist.rotation.z = deg(-30); }
+                        if(bones.l_wrist) { bones.l_wrist.rotation.x = Math.sin(el * 11) * r; bones.l_wrist.rotation.y = -Math.cos(el * 11) * r; bones.l_wrist.rotation.z = deg(30); }
                         requestAnimationFrame(d);
                     } else finalize_gesture();
                 };
@@ -263,8 +266,8 @@
 
         function gesture_mesimeri() {
             is_busy = true; clearFingers(); 
-            let sh_s = isTitan ? { x: deg(60), y: deg(14), z: deg(-25) } : { x: deg(70), y: deg(14), z: deg(-17) };
-            let el_s = isTitan ? { x: deg(90), y: deg(-31), z: deg(-85) } : { x: deg(108), y: deg(-31), z: deg(-69) };
+            let sh_s = isTitan ? { x: deg(50), y: deg(14), z: deg(-25) } : { x: deg(55), y: deg(14), z: deg(-17) };
+            let el_s = isTitan ? { x: deg(80), y: deg(-31), z: deg(-85) } : { x: deg(95), y: deg(-31), z: deg(-69) };
             if(bones.r_shoulder) gsap.to(bones.r_shoulder.rotation, { x: sh_s.x, y: sh_s.y, z: sh_s.z, duration: 0.5 });
             if(bones.r_elbow) gsap.to(bones.r_elbow.rotation, { x: el_s.x, y: el_s.y, z: el_s.z, duration: 0.5 });
             setTimeout(() => {
@@ -334,6 +337,7 @@
             }
         };
 
+        // Φόρτωση αρχικού μοντέλου (Rhea)
         loadAvatar('https://github.com/TitanRhea/avatar-noimatiki/raw/refs/heads/main/updated_model.glb');
         function animate() { requestAnimationFrame(animate); renderer.render(scene, camera); }
         animate();
