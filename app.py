@@ -19,23 +19,18 @@ page = st.sidebar.radio("Select Mode:", ["Recognition Camera", "Avatar Voice Mod
 if "spoken_word" not in st.session_state:
     st.session_state.spoken_word = ""
 
-# --- ΔΙΟΡΘΩΣΗ ΗΧΟΥ (ΕΥΧΑΡΙΣΤΩ) ---
+# --- Ήχος (Διορθωμένο για Ευχαριστώ) ---
 def play_local_sound(word, voice):
     sound_map = {
         "KALIMERA": "kalimera",
-        "EFHARISTO": "efharisto", # Ψάχνει το efharisto.wav
+        "EFHARISTO": "efharisto",
         "GEIA": "geia",
         "KALO MESIMERI": "kalo_mesimeri",
         "ONOMA": "poio.einai.to.onoma.sou"
     }
     base = sound_map.get(word, "")
     if base:
-        # Δοκιμάζει όλους τους πιθανούς συνδυασμούς για σιγουριά
-        filenames = [
-            f"{base}.{voice.lower()}.wav", 
-            f"efharisto.{voice.lower()}.wav",
-            f"efcharisto.{voice.lower()}.wav"
-        ]
+        filenames = [f"{base}.{voice.lower()}.wav", f"efcharisto.{voice.lower()}.wav"]
         for filename in filenames:
             if os.path.exists(filename):
                 with open(filename, "rb") as f:
@@ -45,12 +40,13 @@ def play_local_sound(word, voice):
                     st.markdown(md, unsafe_allow_html=True)
                 break
 
-# --- 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ ---
+# --- 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ (ΑΥΘΕΝΤΙΚΟΣ ΚΛΕΙΔΩΜΕΝΟΣ ΚΩΔΙΚΑΣ) ---
 if page == "Recognition Camera":
     st.title("📷 Live Recognition Mode")
     
     class SignLanguageProcessor(VideoProcessorBase):
         def __init__(self):
+            # ΕΠΑΝΑΦΟΡΑ ΣΤΙΣ ΑΥΘΕΝΤΙΚΕΣ ΣΟΥ ΡΥΘΜΙΣΕΙΣ (0.4 / 0.4)
             self.hands = mp.solutions.hands.Hands(min_detection_confidence=0.4, min_tracking_confidence=0.4)
             self.current_word = "WAITING..."
             self.last_word_time = time.time()
@@ -74,28 +70,36 @@ if page == "Recognition Camera":
                 h_cnt = len(results.multi_hand_landmarks)
                 for lm in results.multi_hand_landmarks:
                     mp.solutions.drawing_utils.draw_landmarks(img, lm, mp.solutions.hands.HAND_CONNECTIONS)
+                    
                     y_wrist = lm.landmark[0].y
+                    # ΕΠΑΝΑΦΟΡΑ ΣΤΙΣ ΑΥΘΕΝΤΙΚΕΣ ΣΟΥ ΣΥΝΤΕΤΑΓΜΕΝΕΣ ΓΙΑ ΚΑΛΗΜΕΡΑ/ΟΝΟΜΑ/ΜΕΣΗΜΕΡΙ
                     if y_wrist < 0.50: h_chin = True 
                     elif y_wrist < 0.85: h_high = True
                     else: h_chest = True
+                    
                     up = 0
                     if lm.landmark[8].y < lm.landmark[6].y: up += 1
                     if lm.landmark[12].y < lm.landmark[10].y: up += 1
                     if lm.landmark[16].y < lm.landmark[14].y: up += 1
                     if lm.landmark[20].y < lm.landmark[18].y: up += 1
+                    
                     if up >= 3: palm = True
                     elif up == 1: idx = True
+                    
                     dist_thumb_pinky = math.hypot(lm.landmark[4].x - lm.landmark[20].x, lm.landmark[4].y - lm.landmark[20].y)
                     dist_index_middle = math.hypot(lm.landmark[8].x - lm.landmark[12].x, lm.landmark[8].y - lm.landmark[12].y)
                     y_index_tip = lm.landmark[8].y
+                    
                     if palm and dist_thumb_pinky > 0.15 and dist_index_middle > 0.03: moutza = True
 
+            # ΕΠΑΝΑΦΟΡΑ ΙΕΡΑΡΧΙΑΣ ΑΚΡΙΒΩΣ ΟΠΩΣ ΔΟΥΛΕΥΕ ΓΙΑ ΤΟ ΟΝΟΜΑ
             if h_cnt == 1 and y_index_tip < 0.65 and not moutza and not idx: active_now = "KALO MESIMERI"
             elif h_cnt >= 2: active_now = "EFHARISTO"
             elif moutza: active_now = "GEIA"
             elif idx and h_high: active_now = "KALIMERA"
             elif idx and h_chest: active_now = "ONOMA"
 
+            # ΕΠΑΝΑΦΟΡΑ ΙΣΤΟΡΙΚΟΥ (6 καρέ, 3 για αναγνώριση)
             if time.time() - self.start_time > 2.0:
                 self.history.append(active_now)
                 if len(self.history) > 6: self.history.pop(0)
@@ -134,10 +138,10 @@ else:
     try:
         rhea_b64 = get_base64_model("updated_model.glb")
         titan_b64 = get_base64_model("titan.glb")
+        
         with open("avatar_files/index.html", "r", encoding="utf-8") as f:
             html_code = f.read()
         
-        # Καθαρή αντικατάσταση Base64
         html_code = html_code.replace('value="updated_model.glb"', f'value="data:model/gltf-binary;base64,{rhea_b64}"')
         html_code = html_code.replace('value="titan.glb"', f'value="data:model/gltf-binary;base64,{titan_b64}"')
         html_code = html_code.replace("loadAvatar('updated_model.glb')", f"loadAvatar('data:model/gltf-binary;base64,{rhea_b64}')")
