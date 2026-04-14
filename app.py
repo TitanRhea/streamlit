@@ -12,7 +12,7 @@ from streamlit_autorefresh import st_autorefresh
 # --- Ρυθμίσεις Σελίδας ---
 st.set_page_config(page_title="SignAI Web", layout="centered")
 st.title("🚀 SignAI: Python Web Edition")
-st.markdown("Κάνε τις κινήσεις σου με φυσικότητα! Το σύστημα διαβάζει γρήγορα και με ασφάλεια.")
+st.markdown("Κάνε τις κινήσεις σου με φυσικότητα! Το σύστημα τώρα διαβάζει γρήγορα και με ελαστικότητα.")
 
 # --- Έλεγχος Κατάστασης ---
 if "spoken_word" not in st.session_state:
@@ -20,7 +20,6 @@ if "spoken_word" not in st.session_state:
 
 # --- Συνάρτηση Αναπαραγωγής Δικών σου Αρχείων ---
 def play_local_sound(word, voice):
-    # Συνδέουμε τα Greeklish του βίντεο με τα αρχεία ήχου
     sound_map = {
         "KALIMERA": "kalimera",
         "EFHARISTO": "efharisto",
@@ -52,8 +51,8 @@ class SignLanguageProcessor(VideoProcessorBase):
         self.hands = mp_hands.Hands(min_detection_confidence=0.4, min_tracking_confidence=0.4)
         self.current_word = "WAITING..."
         self.last_word_time = time.time()
-        self.start_time = time.time() # Για τη σιωπή στην αρχή
-        self.history = [] # Κρυφή ψηφοφορία καρέ
+        self.start_time = time.time() 
+        self.history = [] 
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
@@ -97,7 +96,7 @@ class SignLanguageProcessor(VideoProcessorBase):
                 if palm and dist_thumb_pinky > 0.15 and dist_index_middle > 0.03:
                     moutza = True
 
-        # Η ΙΕΡΑΡΧΙΑ ΣΟΥ (Σε Greeklish)
+        # Η ΙΕΡΑΡΧΙΑ ΣΟΥ 
         if h_cnt == 1 and y_index_tip < 0.65 and not moutza and not idx: 
             active_now = "KALO MESIMERI"
         elif h_cnt >= 2: 
@@ -109,25 +108,25 @@ class SignLanguageProcessor(VideoProcessorBase):
         elif idx and h_chest: 
             active_now = "ONOMA"
 
-        # --- Ο Νέος "Εγκέφαλος" Σιγουριάς χωρίς πάγωμα ---
-        if time.time() - self.start_time > 2.0: # 1. Περιμένει 2 δευτερόλεπτα στην αρχή
+        # --- Ο Νέος "Ελαστικός" Εγκέφαλος ---
+        if time.time() - self.start_time > 2.0: # Ασπίδα 2 δευτερολέπτων στην αρχή
             self.history.append(active_now)
             
-            # Κρατάμε μόνο τα τελευταία 10 καρέ στη μνήμη
-            if len(self.history) > 10:
+            # Κρατάμε μόνο 6 καρέ 
+            if len(self.history) > 6:
                 self.history.pop(0)
             
-            # 2. Αν δει τη λέξη στα 6 από τα 10 καρέ (αστραπιαία), την κλειδώνει
-            if active_now and self.history.count(active_now) >= 6:
+            # Πιο ελαστικό: Αν δει τη λέξη στα 3 από τα 6 καρέ, κλειδώνει!
+            if active_now and self.history.count(active_now) >= 3:
                 self.current_word = active_now
                 self.last_word_time = time.time()
                 
-            # 3. Αν δεν βλέπει απολύτως τίποτα για 10 συνεχόμενα καρέ, ξαναπάει σε αναμονή
-            elif self.history.count(None) == 10:
-                if time.time() - self.last_word_time > 1.5:
+            # Καθαρισμός: Αν στα 6 καρέ τα 4 είναι άδεια (χέρια κάτω), πάει σε αναμονή
+            elif self.history.count(None) >= 4:
+                if time.time() - self.last_word_time > 1.2:
                     self.current_word = "WAITING..."
 
-        # Σχεδίαση UI σε Greeklish 
+        # Σχεδίαση UI
         cv2.rectangle(img, (0, h-70), (w, h), (0, 0, 0), -1)
         cv2.putText(img, f"WORD: {self.current_word}", (20, h-25), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
 
@@ -146,7 +145,7 @@ ctx = webrtc_streamer(
 
 # --- Σύστημα Ήχου ---
 if ctx.state.playing:
-    # 1500 = 1.5 δευτερόλεπτο. Δίνει άπλετο χρόνο στη φωνή να ολοκληρωθεί!
+    # Δίνει χρόνο στον ήχο να ακουστεί ολόκληρος
     st_autorefresh(interval=1500, key="audiorefresh")
     
     if ctx.video_processor:
