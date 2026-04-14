@@ -15,7 +15,7 @@ st.set_page_config(page_title="SignAI Web Hub", layout="wide")
 
 # --- Πλαϊνό Μενού (Sidebar) ---
 st.sidebar.title("SignAI Menu 🚀")
-page = st.sidebar.radio("Select Mode:", ["Recognition Camera", "Avatar Voice Mode"])
+page = st.sidebar.radio("Επίλεξε Λειτουργία:", ["Recognition Camera", "Avatar Voice Mode"])
 
 # --- Έλεγχος Κατάστασης για τον Ήχο (Κάμερα) ---
 if "spoken_word" not in st.session_state:
@@ -46,9 +46,10 @@ def play_local_sound(word, voice):
 if page == "Recognition Camera":
     st.title("📷 Live Recognition Mode")
     
+    # Εδώ παραμένει ο κώδικας της κάμερας που φτιάξαμε
     class SignLanguageProcessor(VideoProcessorBase):
         def __init__(self):
-            self.hands = mp_hands = mp.solutions.hands.Hands(min_detection_confidence=0.4, min_tracking_confidence=0.4)
+            self.hands = mp.solutions.hands.Hands(min_detection_confidence=0.4, min_tracking_confidence=0.4)
             self.current_word = "WAITING..."
             self.last_word_time = time.time()
             self.start_time = time.time()
@@ -70,6 +71,7 @@ if page == "Recognition Camera":
             if results.multi_hand_landmarks:
                 h_cnt = len(results.multi_hand_landmarks)
                 for lm in results.multi_hand_landmarks:
+                    mp.solutions.drawing_utils.draw_landmarks(img, lm, mp.solutions.hands.HAND_CONNECTIONS)
                     y_wrist = lm.landmark[0].y
                     if y_wrist < 0.50: h_chin = True 
                     elif y_wrist < 0.85: h_high = True
@@ -124,30 +126,30 @@ else:
     st.title("🤖 Avatar Voice Mode")
     st.markdown("Πάτα το κουμπί '🎙️ Ενεργοποίηση' και μίλησε στο Άβαταρ!")
 
-    # Λειτουργία μετατροπής αρχείου σε Base64
+    # ΣΥΝΑΡΤΗΣΗ ΜΕΤΑΤΡΟΠΗΣ GLB ΣΕ BASE64 (ΓΙΑ ΝΑ ΜΗ ΧΑΝΟΝΤΑΙ ΟΙ ΚΙΝΗΣΕΙΣ)
     def get_base64_model(file_path):
         with open(file_path, "rb") as f:
             data = f.read()
         return base64.b64encode(data).decode()
 
     try:
-        # Φορτώνουμε τα μοντέλα από το κεντρικό repository
+        # Φόρτωση των μοντέλων
         rhea_b64 = get_base64_model("updated_model.glb")
         titan_b64 = get_base64_model("titan.glb")
         
-        # Διαβάζουμε το index.html
+        # Διάβασμα του δικού σου index.html
         with open("avatar_files/index.html", "r", encoding="utf-8") as f:
             html_code = f.read()
         
-        # ΑΝΤΙΚΑΤΑΣΤΑΣΗ: Βάζουμε τα δεδομένα απευθείας στον κώδικα HTML
-        # Ψάχνουμε τα links που είχαμε βάλει πριν και τα αλλάζουμε με τα Base64 δεδομένα
+        # Εδώ κάνουμε την αντικατάσταση των links με τα Base64 δεδομένα
+        # ΠΡΟΣΟΧΗ: Τα links πρέπει να είναι ακριβώς όπως στο index.html σου
         old_rhea_link = "https://github.com/TitanRhea/avatar-noimatiki/raw/refs/heads/main/updated_model.glb"
         old_titan_link = "https://github.com/TitanRhea/streamlit/raw/refs/heads/main/avatar_files/titan.glb"
         
         html_code = html_code.replace(old_rhea_link, f"data:model/gltf-binary;base64,{rhea_b64}")
         html_code = html_code.replace(old_titan_link, f"data:model/gltf-binary;base64,{titan_b64}")
         
-        # Προβολή
-        components.html(html_code, height=850, scrolling=False)
+        # Προβολή του HTML με σωστό height για να μην κόβονται οι κινήσεις
+        components.html(html_code, height=900, scrolling=False)
     except Exception as e:
-        st.error(f"Error loading files: {e}. Σιγουρέψου ότι τα .glb είναι δίπλα στο app.py")
+        st.error(f"Error loading Avatar logic: {e}")
