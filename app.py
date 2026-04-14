@@ -46,7 +46,6 @@ def play_local_sound(word, voice):
 if page == "Recognition Camera":
     st.title("📷 Live Recognition Mode")
     
-    # Εδώ παραμένει ο κώδικας της κάμερας που φτιάξαμε
     class SignLanguageProcessor(VideoProcessorBase):
         def __init__(self):
             self.hands = mp.solutions.hands.Hands(min_detection_confidence=0.4, min_tracking_confidence=0.4)
@@ -126,30 +125,47 @@ else:
     st.title("🤖 Avatar Voice Mode")
     st.markdown("Πάτα το κουμπί '🎙️ Ενεργοποίηση' και μίλησε στο Άβαταρ!")
 
-    # ΣΥΝΑΡΤΗΣΗ ΜΕΤΑΤΡΟΠΗΣ GLB ΣΕ BASE64 (ΓΙΑ ΝΑ ΜΗ ΧΑΝΟΝΤΑΙ ΟΙ ΚΙΝΗΣΕΙΣ)
     def get_base64_model(file_path):
         with open(file_path, "rb") as f:
             data = f.read()
         return base64.b64encode(data).decode()
 
     try:
-        # Φόρτωση των μοντέλων
         rhea_b64 = get_base64_model("updated_model.glb")
         titan_b64 = get_base64_model("titan.glb")
         
-        # Διάβασμα του δικού σου index.html
         with open("avatar_files/index.html", "r", encoding="utf-8") as f:
             html_code = f.read()
         
-        # Εδώ κάνουμε την αντικατάσταση των links με τα Base64 δεδομένα
-        # ΠΡΟΣΟΧΗ: Τα links πρέπει να είναι ακριβώς όπως στο index.html σου
+        # --- MAGIC FIX: ΔΙΟΡΘΩΣΗ ΚΙΝΗΣΕΩΝ ΑΒΑΤΑΡ (GREEKLISH) ---
+        
+        # 1. Διόρθωση "KALIMERA" (Περιστροφή καρπού)
+        # Αυξάνουμε τον χρόνο (duration) για να προλάβει να γυρίσει ο καρπός
+        html_code = html_code.replace(
+            "gsap.to(bones.r_wrist.rotation, { x: 0, y: deg(-80), z: 0, duration: 0.15, ease: \"none\" })",
+            "gsap.to(bones.r_wrist.rotation, { x: 0, y: deg(-120), z: 0, duration: 0.3, ease: \"power1.inOut\" })" # Διόρθωση
+        )
+        
+        # 2. Διόρθωση "ONOMA" (Κίνηση μπροστά)
+        # Αυξάνουμε την κίνηση στον άξονα Ζ (rotation.x) για να πάνε τα χέρια μπροστά
+        html_code = html_code.replace(
+            "gsap.to(bones.r_shoulder.rotation, { x: deg(50), y: deg(-15), z: deg(-70), duration: 0.5 });",
+            "gsap.to(bones.r_shoulder.rotation, { x: deg(85), y: deg(-15), z: deg(-70), duration: 0.6 });" # Διόρθωση: 85 μοίρες μπροστά
+        )
+        html_code = html_code.replace(
+            "gsap.to(bones.l_shoulder.rotation, { x: deg(25), y: deg(-7), z: deg(51), duration: 0.5 });",
+            "gsap.to(bones.l_shoulder.rotation, { x: deg(65), y: deg(-7), z: deg(51), duration: 0.6 });" # Διόρθωση: 65 μοίρες μπροστά
+        )
+        
+        # --- ΤΕΛΟΣ MAGIC FIX ---
+
+        # Αντικατάσταση των links με τα Base64 δεδομένα
         old_rhea_link = "https://github.com/TitanRhea/avatar-noimatiki/raw/refs/heads/main/updated_model.glb"
         old_titan_link = "https://github.com/TitanRhea/streamlit/raw/refs/heads/main/avatar_files/titan.glb"
         
         html_code = html_code.replace(old_rhea_link, f"data:model/gltf-binary;base64,{rhea_b64}")
         html_code = html_code.replace(old_titan_link, f"data:model/gltf-binary;base64,{titan_b64}")
         
-        # Προβολή του HTML με σωστό height για να μην κόβονται οι κινήσεις
         components.html(html_code, height=900, scrolling=False)
     except Exception as e:
         st.error(f"Error loading Avatar logic: {e}")
