@@ -12,7 +12,7 @@ from streamlit_autorefresh import st_autorefresh
 # --- Ρυθμίσεις Σελίδας ---
 st.set_page_config(page_title="SignAI Web", layout="centered")
 st.title("🚀 SignAI: Python Web Edition")
-st.markdown("Κάνε τις κινήσεις σου μπροστά στην κάμερα. Το σύστημα τώρα αντιδρά πιο γρήγορα!")
+st.markdown("Σταθεροποίησε την κίνησή σου για μισό δευτερόλεπτο για να ακουστεί η λέξη!")
 
 # --- Έλεγχος Κατάστασης ---
 if "spoken_word" not in st.session_state:
@@ -48,10 +48,14 @@ mp_draw = mp.solutions.drawing_utils
 # --- Κλάση Επεξεργασίας Βίντεο ---
 class SignLanguageProcessor(VideoProcessorBase):
     def __init__(self):
-        # Βάλαμε 0.5 για να πιάνει πιο εύκολα τα δύο χέρια στο "Ευχαριστώ"
-        self.hands = mp_hands.Hands(min_detection_confidence=0.5, min_tracking_confidence=0.5)
+        # ΑΚΟΜΑ ΠΙΟ ΓΡΗΓΟΡΟ: 0.4 αντί για 0.5 για να αρπάζει τα χέρια αμέσως
+        self.hands = mp_hands.Hands(min_detection_confidence=0.4, min_tracking_confidence=0.4)
         self.current_word = "ΑΝΑΜΟΝΗ..."
         self.last_word_time = time.time()
+        
+        # Μεταβλητές για το χρονόμετρο "Σιγουριάς" (0.5s)
+        self.candidate_word = None
+        self.candidate_time = 0
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
@@ -107,21 +111,25 @@ class SignLanguageProcessor(VideoProcessorBase):
         elif idx and h_chest: 
             active_now = "όνομα"
 
-        # ΛΟΓΙΚΗ ΤΑΧΥΤΗΤΑΣ & ΚΑΘΑΡΙΣΜΟΥ
+        # ΛΟΓΙΚΗ ΤΑΧΥΤΗΤΑΣ & ΣΙΓΟΥΡΙΑΣ (0.5 δευτερόλεπτα)
         if active_now:
-            # Χρειάζεται μόνο 0.5 δευτερόλεπτα για να καταλάβει τη λέξη
-            if time.time() - self.last_word_time > 0.5:
+            if self.candidate_word != active_now:
+                # Μόλις είδε νέα κίνηση. Ξεκινάει το χρονόμετρο!
+                self.candidate_word = active_now
+                self.candidate_time = time.time()
+            elif time.time() - self.candidate_time >= 0.5:
+                # Η κίνηση έμεινε σταθερή για 0.5s! Την κλειδώνει.
                 self.current_word = active_now
                 self.last_word_time = time.time()
         else:
-            # Αν δεν κάνεις καμία κίνηση για 2 δευτερόλεπτα, μηδενίζει
+            self.candidate_word = None # Ακυρώνει το χρονόμετρο αν χαλάσει η πόζα
             if time.time() - self.last_word_time > 2.0:
                 self.current_word = "ΑΝΑΜΟΝΗ..."
                 self.last_word_time = time.time()
 
         # Σχεδίαση UI 
         cv2.rectangle(img, (0, h-70), (w, h), (0, 0, 0), -1)
-        cv2.putText(img, f"ΛΕΞΗ: {self.current_word}", (20, h-25), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
+        cv2.putText(img, f"ΛΕΞΗ: {self.current_word.upper()}", (20, h-25), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
@@ -136,19 +144,17 @@ ctx = webrtc_streamer(
     rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
 )
 
-# --- Το "Μαγικό" για να μην κολλάει ο ήχος (ΠΙΟ ΓΡΗΓΟΡΟ) ---
+# --- Σύστημα Ήχου (Ασφαλές για να μην κόβονται οι λέξεις) ---
 if ctx.state.playing:
-    # Ανανεώνει τη σελίδα κάθε ΜΙΣΟ δευτερόλεπτο (500) αντί για ένα ολόκληρο
-    st_autorefresh(interval=500, key="audiorefresh")
+    # 1500 = 1.5 δευτερόλεπτο. Δίνει χρόνο στον ήχο να ακουστεί ολόκληρος!
+    st_autorefresh(interval=1500, key="audiorefresh")
     
     if ctx.video_processor:
         current = ctx.video_processor.current_word
         
-        # Αν η λέξη μηδενιστεί, ελευθερώνει τη μνήμη για να μπορεί να ξαναπεί την ίδια
         if current == "ΑΝΑΜΟΝΗ...":
             st.session_state.spoken_word = ""
             
-        # Αν υπάρχει νέα λέξη, παίζει τον ήχο
         elif current != "ΑΝΑΜΟΝΗ..." and current != st.session_state.spoken_word:
             play_local_sound(current, voice_choice)
             st.session_state.spoken_word = current
