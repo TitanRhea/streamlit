@@ -1,30 +1,27 @@
 import cv2
-import numpy as np
-import time
-import base64
-import os
+import mediapipe as mp
 import math
 import streamlit as st
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, WebRtcMode
 import av
-import mediapipe as mp
+import base64
+import os
+import time
 from streamlit_autorefresh import st_autorefresh
 import streamlit.components.v1 as components
 
 # --- Ρυθμίσεις Σελίδας ---
 st.set_page_config(page_title="SignAI Web Hub", layout="wide")
 
-# --- Πλαϊνό Μενού ---
 st.sidebar.title("SignAI Menu 🚀")
 page = st.sidebar.radio("Επίλεξε Λειτουργία:", ["Recognition Camera", "Avatar Voice Mode"])
 
 if "spoken_word" not in st.session_state:
     st.session_state.spoken_word = ""
 
-# --- ΣΥΣΤΗΜΑ ΗΧΟΥ ---
+# --- Ήχος (Διορθωμένο με "ρολόι" για να μην κολλάει) ---
 def play_local_sound(phrase, voice):
     gender = voice.lower()
-    # Εδώ "διαβάζει" τα Greeklish και βρίσκει το σωστό αρχείο ήχου
     sound_map = {
         "KALIMERA": "kalimera",
         "EFHARISTO": "efharisto",
@@ -34,25 +31,34 @@ def play_local_sound(phrase, voice):
     }
     base = sound_map.get(phrase, "")
     if base:
-        filenames = [f"{base}.{gender}.wav", f"efcharisto.{gender}.wav", f"efharisto.{gender}.wav"]
+        filenames = [f"{base}.{gender}.wav"]
+        if phrase == "EFHARISTO":
+            filenames.append(f"efcharisto.{gender}.wav") # Δοκιμάζει και τις δύο ορθογραφίες
+            
         for filename in filenames:
             if os.path.exists(filename):
                 with open(filename, "rb") as f:
                     data = f.read()
                     b64 = base64.b64encode(data).decode()
-                    md = f"""<audio autoplay="true"><source src="data:audio/wav;base64,{b64}" type="audio/wav"></audio>"""
+                    # Προσθέσαμε ένα ID με την τρέχουσα ώρα για να αναγκάσουμε το Streamlit να παίξει τον ήχο!
+                    md = f"""
+                        <div id="audio_{time.time()}">
+                            <audio autoplay="true">
+                                <source src="data:audio/wav;base64,{b64}" type="audio/wav">
+                            </audio>
+                        </div>
+                    """
                     st.markdown(md, unsafe_allow_html=True)
                 break
 
 # ==========================================
-# 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ (ΜΕ GREEKLISH ΓΙΑ ΝΑ ΜΗΝ ΒΓΑΖΕΙ ????)
+# 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ
 # ==========================================
 if page == "Recognition Camera":
     st.title("📷 Live Recognition Mode")
     
     class SignLanguageProcessor(VideoProcessorBase):
         def __init__(self):
-            # Η αυθεντική σου ρύθμιση 0.7
             self.hands = mp.solutions.hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.7)
             self.current_word = "WAITING..."
             self.recording_started_at = 0
@@ -78,9 +84,10 @@ if page == "Recognition Camera":
                     mp.solutions.drawing_utils.draw_landmarks(img, lm, mp.solutions.hands.HAND_CONNECTIONS)
                     
                     y_wrist = lm.landmark[0].y
-                    # Οι αυθεντικές σου συντεταγμένες
+                    # --- ΔΙΟΡΘΩΣΗ ΓΙΑ ΤΟ Streamlit ---
+                    # Αλλάξαμε το 0.85 σε 0.75 γιατί ο browser "κόβει" το κάτω μέρος της κάμερας!
                     if y_wrist < 0.50: h_chin = True 
-                    elif y_wrist < 0.85: h_high = True
+                    elif y_wrist < 0.75: h_high = True 
                     else: h_chest = True
 
                     up = 0
@@ -99,17 +106,13 @@ if page == "Recognition Camera":
                     if palm and dist_thumb_pinky > 0.15 and dist_index_middle > 0.03: 
                         moutza = True
 
-            # ==========================================
-            # ΕΔΩ ΗΤΑΝ ΤΟ ΛΑΘΟΣ ΠΟΥ ΕΒΓΑΖΕ ΕΡΩΤΗΜΑΤΙΚΑ!
-            # Αλλάξαμε τα ελληνικά σε GREEKLISH για να τα διαβάζει η OpenCV!
-            # ==========================================
+            # --- GREEKLISH ΓΙΑ ΝΑ ΜΗΝ ΒΓΑΖΕΙ ???? ΣΤΗΝ ΟΘΟΝΗ ---
             if h_cnt == 1 and y_index_tip < 0.65 and not moutza and not idx: active_now = "KALO MESIMERI"
             elif h_cnt >= 2: active_now = "EFHARISTO"
             elif moutza: active_now = "GEIA"
             elif idx and h_high: active_now = "KALIMERA"
             elif idx and h_chest: active_now = "ONOMA"
 
-            # Το αυθεντικό σου ιστορικό (1.4s)
             if active_now:
                 if not self.recording:
                     self.recording = True
@@ -126,7 +129,7 @@ if page == "Recognition Camera":
                         self.current_word = final
                     self.recording = False
 
-            # Το cv2.putText τώρα θα διαβάζει τα Greeklish τέλεια χωρίς "????"
+            # Το cv2 τώρα διαβάζει Greeklish, οπότε τέλος τα ερωτηματικά!
             cv2.rectangle(img, (0, h-70), (w, h), (0, 0, 0), -1)
             cv2.putText(img, f"WORD: {self.current_word}", (20, h-25), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
             return av.VideoFrame.from_ndarray(img, format="bgr24")
@@ -143,7 +146,7 @@ if page == "Recognition Camera":
                 st.session_state.spoken_word = current
 
 # ==========================================
-# 2Η ΣΕΛΙΔΑ: ΑΒΑΤΑΡ (ΚΛΕΙΔΩΜΕΝΟ ΜΕ IFRAME)
+# 2Η ΣΕΛΙΔΑ: ΑΒΑΤΑΡ
 # ==========================================
 else:
     st.title("🤖 Avatar Voice Mode")
