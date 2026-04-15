@@ -3,5 +3,6 @@ streamlit-webrtc
 opencv-python-headless
 mediapipe==0.10.14
 numpy
+pandas
+scikit-learn
 av
-streamlit-autorefresh
