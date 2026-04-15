@@ -189,7 +189,7 @@ if page == "Recognition Camera":
                         "EFHARISTO": 1.7,
                         "GEIA": 1.2,
                         "KALO MESIMERI": 2.2,
-                        "ONOMA": 4.5  # ΕΔΩ ΕΒΑΛΑ ΤΟ 4.5 ΠΟΥ ΖΗΤΗΣΕΣ
+                        "ONOMA": 5.0  # ΕΔΩ ΕΒΑΛΑ ΤΟ 5.0 ΠΟΥ ΖΗΤΗΣΕΣ
                     }
                     st.session_state.current_audio_delay = durations.get(word_to_speak, 1.7)
                     
