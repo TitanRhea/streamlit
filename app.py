@@ -135,8 +135,9 @@ if page == "Recognition Camera":
                     if self.word_candidates:
                         # --- ΤΟ ΜΥΣΤΙΚΟ: Η ΑΠΟΛΥΤΗ ΙΕΡΑΡΧΙΑ ---
                         counts = {word: self.word_candidates.count(word) for word in set(self.word_candidates)}
-                        # Φιλτράρουμε το θόρυβο (πρέπει να δει το νόημα για τουλάχιστον 3 καρέ)
-                        valid_words = [w for w, c in counts.items() if c >= 3 and w != "NONE"]
+                        
+                        # --- Η ΜΟΝΑΔΙΚΗ ΔΙΟΡΘΩΣΗ: Αλλαγή του c >= 3 σε c >= 1 για να δουλεύει στο ίντερνετ ---
+                        valid_words = [w for w, c in counts.items() if c >= 1 and w != "NONE"]
                         
                         final = "NONE"
                         # Εδώ λέμε στην κάμερα: Αν είδες Όνομα, ΚΛΕΙΔΩΣΕ ΤΟ!
