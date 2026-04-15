@@ -16,19 +16,16 @@ st.set_page_config(page_title="SignAI Web Hub", layout="wide")
 st.sidebar.title("SignAI Menu 🚀")
 page = st.sidebar.radio("Επίλεξε Λειτουργία:", ["Recognition Camera", "Avatar Voice Mode"])
 
-# --- Session States (Μνήμη) ---
+# --- Session States (Η Μνήμη) ---
 if "spoken_word" not in st.session_state:
     st.session_state.spoken_word = ""
 if "last_audio_played" not in st.session_state:
     st.session_state.last_audio_played = 0
-if "current_audio_html" not in st.session_state:
-    st.session_state.current_audio_html = ""
-# ΝΕΟ: Εδώ αποθηκεύουμε πόσα δευτερόλεπτα πρέπει να περιμένει για την ΚΑΘΕ λέξη
 if "audio_delay" not in st.session_state:
     st.session_state.audio_delay = 0.0
 
-# --- Ήχος ---
-def get_audio_html(phrase, voice, timestamp):
+# --- Ο Ήχος (Ο ΑΥΘΕΝΤΙΚΟΣ ΠΟΥ ΑΚΟΥΓΟΤΑΝ - ΚΛΕΙΔΩΜΕΝΟΣ) ---
+def play_local_sound(phrase, voice):
     gender = voice.lower()
     sound_map = {
         "KALIMERA": "kalimera",
@@ -45,11 +42,18 @@ def get_audio_html(phrase, voice, timestamp):
                 with open(filename, "rb") as f:
                     data = f.read()
                     b64 = base64.b64encode(data).decode()
-                    return f'<audio id="audio_{timestamp}" autoplay="true" style="display:none;"><source src="data:audio/wav;base64,{b64}" type="audio/wav"></audio>'
-    return ""
+                    md = f"""
+                        <div id="audio_{time.time()}">
+                            <audio autoplay="true">
+                                <source src="data:audio/wav;base64,{b64}" type="audio/wav">
+                            </audio>
+                        </div>
+                    """
+                    st.markdown(md, unsafe_allow_html=True)
+                break
 
 # ==========================================
-# 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ
+# 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ (ΚΑΘΑΡΗ ΟΘΟΝΗ & ΕΞΥΠΝΗ ΟΥΡΑ)
 # ==========================================
 if page == "Recognition Camera":
     st.title("📷 Live Recognition Mode")
@@ -84,7 +88,7 @@ if page == "Recognition Camera":
                 h_cnt = len(results.multi_hand_landmarks)
                 for lm in results.multi_hand_landmarks:
                     y_wrist = lm.landmark[0].y
-                    # ΚΛΕΙΔΩΜΕΝΟ 0.85
+                    # ΚΛΕΙΔΩΜΕΝΟ: 0.85
                     if y_wrist < 0.50: h_chin = True 
                     elif y_wrist < 0.85: h_high = True 
                     else: h_chest = True
@@ -123,7 +127,7 @@ if page == "Recognition Camera":
                 self.word_candidates.append("NONE")
 
             if self.recording:
-                # 1.5 δευτερόλεπτο χρόνος "λοκαρίσματος" της κίνησης, όπως στο VS Code
+                # 1.5 δευτερόλεπτο χρόνος καταγραφής (Όπως στο VS Code)
                 if (time.time() - self.recording_started_at) >= 1.5:
                     if self.word_candidates:
                         final = max(set(self.word_candidates), key=self.word_candidates.count)
@@ -131,7 +135,7 @@ if page == "Recognition Camera":
                             self.speak_queue.append(final) 
                     self.recording = False
 
-            # ΕΠΙΣΤΡΕΦΕΙ ΤΗΝ ΕΙΚΟΝΑ ΚΑΘΑΡΗ! (Χωρίς cv2.putText και cv2.rectangle)
+            # Επιστρέφει την εικόνα καθαρή
             return av.VideoFrame.from_ndarray(img, format="bgr24")
 
     voice_choice = st.radio("Φωνή:", ["Female", "Male"], horizontal=True)
@@ -149,30 +153,23 @@ if page == "Recognition Camera":
         if ctx.video_processor:
             if len(ctx.video_processor.speak_queue) > 0:
                 now = time.time()
-                # Η εφαρμογή περιμένει όσο ακριβώς διαρκεί η προηγούμενη λέξη!
+                # Περιμένει όσο διαρκεί η κάθε λέξη
                 if now - st.session_state.last_audio_played >= st.session_state.audio_delay: 
                     word_to_speak = ctx.video_processor.speak_queue.pop(0)
                     
-                    # --- Ο ΕΞΥΠΝΟΣ ΧΡΟΝΟΜΕΤΡΗΤΗΣ ΤΗΣ VS CODE ---
-                    # Εδώ ορίζουμε πόσο θα περιμένει για την ΕΠΟΜΕΝΗ λέξη 
-                    # βάσει του πόσο μεγάλη είναι αυτή που παίζει τώρα.
+                    # Ο έξυπνος χρονομετρητής
                     durations = {
                         "KALIMERA": 1.2,
                         "EFHARISTO": 1.2,
                         "GEIA": 1.0,
                         "KALO MESIMERI": 1.8,
-                        "ONOMA": 3.0  # Η μεγάλη φράση παίρνει 3 δεύτερα!
+                        "ONOMA": 3.0
                     }
                     st.session_state.audio_delay = durations.get(word_to_speak, 1.5)
                     
-                    new_html = get_audio_html(word_to_speak, voice_choice, now)
-                    if new_html:
-                        st.session_state.current_audio_html = new_html
-                        st.session_state.last_audio_played = now
-
-        # Αυτό μένει ζωντανό για να παίζει ο ήχος μέχρι τέλους
-        if st.session_state.current_audio_html:
-            st.markdown(st.session_state.current_audio_html, unsafe_allow_html=True)
+                    # Καλεί ΑΠΕΥΘΕΙΑΣ τη συνάρτηση ήχου που δουλεύει
+                    play_local_sound(word_to_speak, voice_choice)
+                    st.session_state.last_audio_played = now
 
 # ==========================================
 # 2Η ΣΕΛΙΔΑ: ΑΒΑΤΑΡ
