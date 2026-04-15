@@ -16,13 +16,10 @@ st.set_page_config(page_title="SignAI Web Hub", layout="wide")
 st.sidebar.title("SignAI Menu 🚀")
 page = st.sidebar.radio("Επίλεξε Λειτουργία:", ["Recognition Camera", "Avatar Voice Mode"])
 
-# --- Session States για την Ουρά Ήχου ---
+# --- Session States ---
+# (Κρατάμε μόνο το spoken_word, όπως στον 1ο κώδικα που δούλευε)
 if "spoken_word" not in st.session_state:
     st.session_state.spoken_word = ""
-if "last_audio_played" not in st.session_state:
-    st.session_state.last_audio_played = 0
-if "current_audio_delay" not in st.session_state:
-    st.session_state.current_audio_delay = 0.0
 
 # --- Ήχος (ΚΛΕΙΔΩΜΕΝΟΣ) ---
 def play_local_sound(phrase, voice):
@@ -68,7 +65,7 @@ if page == "Recognition Camera":
             self.recording = False
             self.recording_started_at = 0
             self.word_candidates = []
-            self.speak_queue = [] 
+            self.current_word = "" # Αντί για ουρά, χρησιμοποιούμε την απλή λέξη
 
         def recv(self, frame):
             img = frame.to_ndarray(format="bgr24")
@@ -126,23 +123,20 @@ if page == "Recognition Camera":
                 else:
                     self.word_candidates.append(active_now)
             elif self.recording:
-                # Αν πέσουν τα χέρια σου, βάζει "NONE" για να μην μπερδευτεί
+                # Αν πέσουν τα χέρια σου, βάζει "NONE"
                 self.word_candidates.append("NONE")
 
             if self.recording:
-                # 2.5 δευτερόλεπτο χρόνος καταγραφής
-                if (time.time() - self.recording_started_at) >= 2.5:
+                # 1.5 δευτερόλεπτο χρόνος καταγραφής
+                if (time.time() - self.recording_started_at) >= 1.5:
                     if self.word_candidates:
-                        # --- ΤΟ ΜΥΣΤΙΚΟ: Η ΑΠΟΛΥΤΗ ΙΕΡΑΡΧΙΑ ---
+                        # --- Η ΑΠΟΛΥΤΗ ΙΕΡΑΡΧΙΑ ΣΟΥ ---
                         counts = {word: self.word_candidates.count(word) for word in set(self.word_candidates)}
-                        # Φιλτράρουμε το θόρυβο (πρέπει να δει το νόημα για τουλάχιστον 3 καρέ)
                         valid_words = [w for w, c in counts.items() if c >= 3 and w != "NONE"]
                         
                         final = "NONE"
-                        # Εδώ λέμε στην κάμερα: Αν είδες Όνομα, ΚΛΕΙΔΩΣΕ ΤΟ!
                         if "ONOMA" in valid_words:
                             final = "ONOMA"
-                        # Αν δεν είδες Όνομα αλλά είδες Ευχαριστώ, ΚΛΕΙΔΩΣΕ ΤΟ (αγνόησε το Γεια)
                         elif "EFHARISTO" in valid_words:
                             final = "EFHARISTO"
                         elif "KALIMERA" in valid_words:
@@ -152,11 +146,11 @@ if page == "Recognition Camera":
                         elif "KALO MESIMERI" in valid_words:
                             final = "KALO MESIMERI"
                         
-                        if final != "NONE":
-                            self.speak_queue.append(final)
+                        # Σώζουμε τη λέξη στο current_word (αντί για ουρά)
+                        self.current_word = final
                             
                     self.recording = False
-                    self.word_candidates = [] # Καθαρίζει τη μνήμη για το επόμενο νόημα!
+                    self.word_candidates = [] 
 
             # ΚΑΘΑΡΗ ΟΘΟΝΗ!
             return av.VideoFrame.from_ndarray(img, format="bgr24")
@@ -170,30 +164,22 @@ if page == "Recognition Camera":
         async_processing=True 
     )
 
+    # ==========================================
+    # Η ΑΠΛΗ, ΤΕΛΕΙΑ ΛΟΓΙΚΗ ΗΧΟΥ ΠΟΥ ΖΗΤΗΣΕΣ
+    # ==========================================
     if ctx.state.playing:
-        st_autorefresh(interval=1000, key="camera_refresh") 
+        st_autorefresh(interval=1500, key="camera_refresh") 
         if ctx.video_processor:
-            # ==========================================
-            # ΕΔΩ ΛΥΝΕΤΑΙ Η ΟΥΡΑ: Ο ΔΥΝΑΜΙΚΟΣ ΧΡΟΝΟΣ
-            # ==========================================
-            if len(ctx.video_processor.speak_queue) > 0:
-                now = time.time()
-                # Περιμένει όσο του λέει η προηγούμενη λέξη
-                if now - st.session_state.last_audio_played > st.session_state.current_audio_delay: 
-                    word_to_speak = ctx.video_processor.speak_queue.pop(0)
-                    
-                    # Ορίζει πόσο χρόνο θα δώσει σε αυτή τη λέξη για να ακουστεί ολόκληρη!
-                    durations = {
-                        "KALIMERA": 1.5,
-                        "EFHARISTO": 1.5,
-                        "GEIA": 1.2,
-                        "KALO MESIMERI": 2.2,
-                        "ONOMA": 3.8 
-                    }
-                    st.session_state.current_audio_delay = durations.get(word_to_speak, 1.5)
-                    
-                    play_local_sound(word_to_speak, voice_choice)
-                    st.session_state.last_audio_played = now
+            current = ctx.video_processor.current_word
+            
+            # Αν υπάρχει λέξη και δεν είναι αυτή που μόλις είπε...
+            if current and current != "NONE" and current != st.session_state.spoken_word:
+                play_local_sound(current, voice_choice)
+                st.session_state.spoken_word = current
+                
+            # Αν κατέβασε τα χέρια (NONE), μηδενίζουμε τη μνήμη για να μπορεί να ξαναπεί την ίδια λέξη!
+            elif current == "NONE":
+                st.session_state.spoken_word = ""
 
 # ==========================================
 # 2Η ΣΕΛΙΔΑ: ΑΒΑΤΑΡ (ΚΛΕΙΔΩΜΕΝΟ)
