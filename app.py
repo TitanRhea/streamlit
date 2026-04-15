@@ -186,12 +186,12 @@ if page == "Recognition Camera":
                     # Ορίζει πόσο χρόνο θα δώσει σε αυτή τη λέξη για να ακουστεί ολόκληρη!
                     durations = {
                         "KALIMERA": 1.5,
-                        "EFHARISTO": 1.5,
+                        "EFHARISTO": 1.7,
                         "GEIA": 1.2,
                         "KALO MESIMERI": 2.2,
-                        "ONOMA": 4.2  # ΕΔΩ ΕΒΑΛΑ ΤΟ 4.2 ΠΟΥ ΖΗΤΗΣΕΣ
+                        "ONOMA": 4.5  # ΕΔΩ ΕΒΑΛΑ ΤΟ 4.5 ΠΟΥ ΖΗΤΗΣΕΣ
                     }
-                    st.session_state.current_audio_delay = durations.get(word_to_speak, 1.5)
+                    st.session_state.current_audio_delay = durations.get(word_to_speak, 1.7)
                     
                     play_local_sound(word_to_speak, voice_choice)
                     st.session_state.last_audio_played = now
