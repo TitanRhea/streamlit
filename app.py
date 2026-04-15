@@ -16,16 +16,16 @@ st.set_page_config(page_title="SignAI Web Hub", layout="wide")
 st.sidebar.title("SignAI Menu 🚀")
 page = st.sidebar.radio("Επίλεξε Λειτουργία:", ["Recognition Camera", "Avatar Voice Mode"])
 
-# --- Session States για την Ουρά Ήχου (Για να μην κόβεται ποτέ!) ---
+# --- Session States (Η μνήμη της εφαρμογής) ---
 if "spoken_word" not in st.session_state:
     st.session_state.spoken_word = ""
-if "last_word_time" not in st.session_state:
-    st.session_state.last_word_time = 0
-if "current_audio_html" not in st.session_state:
-    st.session_state.current_audio_html = ""
+if "last_audio_played" not in st.session_state:
+    st.session_state.last_audio_played = 0
+if "audio_to_play" not in st.session_state:
+    st.session_state.audio_to_play = None
 
-# --- Ήχος (Αλεξίσφαιρος από τα Refresh) ---
-def get_audio_html(phrase, voice, timestamp):
+# --- Συνάρτηση για να παίρνουμε τον ήχο σε Base64 ---
+def get_audio_b64(phrase, voice):
     gender = voice.lower()
     sound_map = {
         "KALIMERA": "kalimera",
@@ -41,16 +41,15 @@ def get_audio_html(phrase, voice, timestamp):
             if os.path.exists(filename):
                 with open(filename, "rb") as f:
                     data = f.read()
-                    b64 = base64.b64encode(data).decode()
-                    # Με το μοναδικό ID (timestamp), το Streamlit καταλαβαίνει ότι πρέπει να αφήσει το ηχείο να παίξει μέχρι τέλους!
-                    return f'<audio autoplay="true" id="audio_{timestamp}"><source src="data:audio/wav;base64,{b64}" type="audio/wav"></audio>'
-    return ""
+                    return base64.b64encode(data).decode()
+    return None
 
 # ==========================================
 # 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ 
 # ==========================================
 if page == "Recognition Camera":
     st.title("📷 Live Recognition Mode")
+    st.markdown("*(Tip: Κάνε ένα κλικ οπουδήποτε στη σελίδα για να δώσεις άδεια στον browser να παίξει ήχο)*")
     
     class SignLanguageProcessor(VideoProcessorBase):
         def __init__(self):
@@ -63,7 +62,7 @@ if page == "Recognition Camera":
         def recv(self, frame):
             img = frame.to_ndarray(format="bgr24")
             
-            # Μικραίνουμε την εικόνα για ταχύτητα
+            # Μικραίνουμε την εικόνα για να τρέχει "σφαίρα"
             img = cv2.resize(img, (640, 480)) 
             img = cv2.flip(img, 1)
             
@@ -82,7 +81,7 @@ if page == "Recognition Camera":
                 h_cnt = len(results.multi_hand_landmarks)
                 for lm in results.multi_hand_landmarks:
                     y_wrist = lm.landmark[0].y
-                    # ΚΛΕΙΔΩΜΕΝΟ: Οι δικές σου αυθεντικές συντεταγμένες
+                    # ΚΛΕΙΔΩΜΕΝΟ: Το 0.85 για να πιάνει άνετα το "Όνομα"
                     if y_wrist < 0.50: h_chin = True 
                     elif y_wrist < 0.85: h_high = True 
                     else: h_chest = True
@@ -103,14 +102,14 @@ if page == "Recognition Camera":
                     if palm and dist_thumb_pinky > 0.15 and dist_index_middle > 0.03: 
                         moutza = True
 
-            # ΚΛΕΙΔΩΜΕΝΗ ΙΕΡΑΡΧΙΑ (GREEKLISH)
+            # GREEKLISH ΓΙΑ ΣΙΓΟΥΡΙΑ
             if h_cnt == 1 and y_index_tip < 0.65 and not moutza and not idx: active_now = "KALO MESIMERI"
             elif h_cnt >= 2: active_now = "EFHARISTO"
             elif moutza: active_now = "GEIA"
             elif idx and h_high: active_now = "KALIMERA"
             elif idx and h_chest: active_now = "ONOMA"
 
-            # --- Η ΛΟΓΙΚΗ ΤΗΣ ΚΑΤΑΓΡΑΦΗΣ ---
+            # ΛΟΓΙΚΗ ΚΑΤΑΓΡΑΦΗΣ (1.5 δευτερόλεπτο)
             if active_now:
                 if not self.recording:
                     self.recording = True
@@ -119,12 +118,9 @@ if page == "Recognition Camera":
                 else:
                     self.word_candidates.append(active_now)
             elif self.recording:
-                # Αν κατεβάσεις τα χέρια (δεν κάνεις νόημα), καταγράφει ΚΕΝΟ. 
-                # Έτσι αγνοεί τα λάθη ενδιάμεσα στις κινήσεις σου!
                 self.word_candidates.append("NONE")
 
             if self.recording:
-                # Επιστροφή στο 1.5 δευτερόλεπτο (όπως στο VS Code)
                 if (time.time() - self.recording_started_at) >= 1.5:
                     if self.word_candidates:
                         final = max(set(self.word_candidates), key=self.word_candidates.count)
@@ -132,6 +128,7 @@ if page == "Recognition Camera":
                             self.speak_queue.append(final) 
                     self.recording = False
 
+            # Χωρίς γράμματα στην οθόνη, όπως ζήτησες
             return av.VideoFrame.from_ndarray(img, format="bgr24")
 
     voice_choice = st.radio("Φωνή:", ["Female", "Male"], horizontal=True)
@@ -144,21 +141,26 @@ if page == "Recognition Camera":
     )
 
     if ctx.state.playing:
-        st_autorefresh(interval=1500, key="camera_refresh") 
-        if ctx.video_processor:
-            if len(ctx.video_processor.speak_queue) > 0:
-                now = time.time()
-                # Χρόνος μεταξύ των λέξεων: 3 δευτερόλεπτα (αρκετός για να πει "ποιο είναι το όνομά σου")
-                if now - st.session_state.last_word_time > 3.0: 
-                    word_to_speak = ctx.video_processor.speak_queue.pop(0)
-                    new_audio_html = get_audio_html(word_to_speak, voice_choice, now)
-                    if new_audio_html:
-                        st.session_state.current_audio_html = new_audio_html
-                    st.session_state.last_word_time = now
+        st_autorefresh(interval=1000, key="camera_refresh") 
+        
+        # 1. Παίρνουμε τη λέξη από την ουρά (κάθε 2.2 δευτερόλεπτα)
+        if ctx.video_processor and len(ctx.video_processor.speak_queue) > 0:
+            now = time.time()
+            if now - st.session_state.last_audio_played > 2.2: 
+                word_to_speak = ctx.video_processor.speak_queue.pop(0)
+                b64_audio = get_audio_b64(word_to_speak, voice_choice)
+                if b64_audio:
+                    # Αποθηκεύουμε τον ήχο για να παίξει
+                    st.session_state.audio_to_play = b64_audio
+                    st.session_state.last_audio_played = now
 
-        # Αυτό κρατάει τον ήχο ζωντανό και δεν τον κόβει στα μισά!
-        if st.session_state.current_audio_html:
-            st.markdown(st.session_state.current_audio_html, unsafe_allow_html=True)
+        # 2. Το Streamlit "φυτεύει" το ηχείο ΜΟΝΟ μια φορά και μετά το καθαρίζει!
+        if st.session_state.audio_to_play:
+            b64 = st.session_state.audio_to_play
+            html_code = f'<audio id="audio_{time.time()}" autoplay="true"><source src="data:audio/wav;base64,{b64}" type="audio/wav"></audio>'
+            st.markdown(html_code, unsafe_allow_html=True)
+            # Καθαρισμός για να μην σπαμάρει τον Chrome στο επόμενο refresh
+            st.session_state.audio_to_play = None
 
 # ==========================================
 # 2Η ΣΕΛΙΔΑ: ΑΒΑΤΑΡ (ΚΛΕΙΔΩΜΕΝΟ)
