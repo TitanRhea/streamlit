@@ -60,7 +60,7 @@ def play_local_sound(phrase, voice):
                 break
 
 # ==========================================
-# 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ (ΚΑΘΑΡΗ ΟΘΟΝΗ & ΙΕΡΑΡΧΙΑ)
+# 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ (ΚΑΘΑΡΗ ΟΘΟΝΗ & ΑΥΘΕΝΤΙΚΗ ΑΝΑΓΝΩΡΙΣΗ)
 # ==========================================
 if page == "Recognition Camera":
     st.title("📷 Live Recognition Mode")
@@ -121,7 +121,7 @@ if page == "Recognition Camera":
             elif idx and h_high: active_now = "KALIMERA"
             elif idx and h_chest: active_now = "ONOMA"
 
-            # Καταγραφή
+            # Καταγραφή (Η αυθεντική, δική σου λογική)
             if active_now:
                 if not self.recording:
                     self.recording = True
@@ -129,36 +129,15 @@ if page == "Recognition Camera":
                     self.word_candidates = [active_now]
                 else:
                     self.word_candidates.append(active_now)
-            elif self.recording:
-                # Αν πέσουν τα χέρια σου, βάζει "NONE" για να μην μπερδευτεί
-                self.word_candidates.append("NONE")
 
             if self.recording:
-                # 1.5 δευτερόλεπτο χρόνος καταγραφής
-                if (time.time() - self.recording_started_at) >= 1.5:
+                # Ο χρόνος καταγραφής (2.5 δευτερόλεπτα) - ΟΠΩΣ ΤΟ ΗΘΕΛΕΣ
+                if (time.time() - self.recording_started_at) >= 2.5:
                     if self.word_candidates:
-                        counts = {word: self.word_candidates.count(word) for word in set(self.word_candidates)}
-                        
-                        # Το c >= 1 για να δουλεύει άψογα ακόμα και με κακό ίντερνετ
-                        valid_words = [w for w, c in counts.items() if c >= 1 and w != "NONE"]
-                        
-                        final = "NONE"
-                        if "ONOMA" in valid_words:
-                            final = "ONOMA"
-                        elif "EFHARISTO" in valid_words:
-                            final = "EFHARISTO"
-                        elif "KALIMERA" in valid_words:
-                            final = "KALIMERA"
-                        elif "GEIA" in valid_words:
-                            final = "GEIA"
-                        elif "KALO MESIMERI" in valid_words:
-                            final = "KALO MESIMERI"
-                        
-                        if final != "NONE":
-                            self.speak_queue.append(final)
-                            
+                        # Η αυθεντική, σωστή επιλογή κίνησης
+                        final = max(set(self.word_candidates), key=self.word_candidates.count)
+                        self.speak_queue.append(final) # Προσθήκη στην ουρά
                     self.recording = False
-                    self.word_candidates = [] 
 
             # ΚΑΘΑΡΗ ΟΘΟΝΗ!
             return av.VideoFrame.from_ndarray(img, format="bgr24")
@@ -184,13 +163,12 @@ if page == "Recognition Camera":
                 if now - st.session_state.last_audio_played > st.session_state.current_audio_delay: 
                     word_to_speak = ctx.video_processor.speak_queue.pop(0)
                     
-                    # Ορίζει πόσο χρόνο θα δώσει σε αυτή τη λέξη για να ακουστεί ολόκληρη!
                     durations = {
                         "KALIMERA": 1.5,
                         "EFHARISTO": 1.5,
                         "GEIA": 1.2,
                         "KALO MESIMERI": 2.2,
-                        "ONOMA": 4.2  
+                        "ONOMA": 4.2  # Τα 4.2 δευτερόλεπτα
                     }
                     st.session_state.current_audio_delay = durations.get(word_to_speak, 1.5)
                     
