@@ -16,15 +16,13 @@ st.set_page_config(page_title="SignAI Web Hub", layout="wide")
 st.sidebar.title("SignAI Menu 🚀")
 page = st.sidebar.radio("Επίλεξε Λειτουργία:", ["Recognition Camera", "Avatar Voice Mode"])
 
-# --- Session States (Η Μνήμη) ---
+# --- Session States ---
 if "spoken_word" not in st.session_state:
     st.session_state.spoken_word = ""
 if "last_audio_played" not in st.session_state:
     st.session_state.last_audio_played = 0
-if "audio_delay" not in st.session_state:
-    st.session_state.audio_delay = 0.0
 
-# --- Ο Ήχος (Ο ΑΥΘΕΝΤΙΚΟΣ ΠΟΥ ΑΚΟΥΓΟΤΑΝ - ΚΛΕΙΔΩΜΕΝΟΣ) ---
+# --- Ο ΗΧΟΣ ΠΟΥ ΔΟΥΛΕΥΕΙ ΤΕΛΕΙΑ ---
 def play_local_sound(phrase, voice):
     gender = voice.lower()
     sound_map = {
@@ -53,7 +51,7 @@ def play_local_sound(phrase, voice):
                 break
 
 # ==========================================
-# 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ (ΚΑΘΑΡΗ ΟΘΟΝΗ & ΕΞΥΠΝΗ ΟΥΡΑ)
+# 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ (ΜΕ ΟΘΟΝΗ ΓΙΑ ΝΑ ΒΛΕΠΕΙΣ ΤΙ ΓΙΝΕΤΑΙ)
 # ==========================================
 if page == "Recognition Camera":
     st.title("📷 Live Recognition Mode")
@@ -66,12 +64,18 @@ if page == "Recognition Camera":
             self.recording_started_at = 0
             self.word_candidates = []
             self.speak_queue = [] 
+            
+            # Μεταβλητές για να βλέπεις τα γράμματα στην οθόνη
+            self.current_reading = ""
+            self.final_word = "WAITING..."
 
         def recv(self, frame):
             img = frame.to_ndarray(format="bgr24")
             
+            # Μικραίνουμε την εικόνα για να τρέχει χωρίς lag
             img = cv2.resize(img, (640, 480)) 
             img = cv2.flip(img, 1)
+            h, w, _ = img.shape
             
             rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             rgb.flags.writeable = False 
@@ -88,7 +92,7 @@ if page == "Recognition Camera":
                 h_cnt = len(results.multi_hand_landmarks)
                 for lm in results.multi_hand_landmarks:
                     y_wrist = lm.landmark[0].y
-                    # ΚΛΕΙΔΩΜΕΝΟ: 0.85
+                    # ΚΛΕΙΔΩΜΕΝΟ: Το 0.85 
                     if y_wrist < 0.50: h_chin = True 
                     elif y_wrist < 0.85: h_high = True 
                     else: h_chest = True
@@ -115,27 +119,34 @@ if page == "Recognition Camera":
             elif idx and h_high: active_now = "KALIMERA"
             elif idx and h_chest: active_now = "ONOMA"
 
-            # Καταγραφή κινήσεων
+            # ΚΑΤΑΓΡΑΦΗ (ΟΠΩΣ ΣΤΟ VS CODE)
             if active_now:
                 if not self.recording:
                     self.recording = True
                     self.recording_started_at = time.time()
                     self.word_candidates = [active_now]
+                    self.current_reading = active_now
                 else:
                     self.word_candidates.append(active_now)
-            elif self.recording:
-                self.word_candidates.append("NONE")
+                    self.current_reading = active_now
 
             if self.recording:
-                # 1.5 δευτερόλεπτο χρόνος καταγραφής (Όπως στο VS Code)
+                # Χρόνος 1.5 δευτερόλεπτο για να κλειδώσει γρήγορα
                 if (time.time() - self.recording_started_at) >= 1.5:
                     if self.word_candidates:
                         final = max(set(self.word_candidates), key=self.word_candidates.count)
-                        if final != "NONE":
-                            self.speak_queue.append(final) 
+                        self.final_word = final
+                        self.speak_queue.append(final) 
                     self.recording = False
+                    self.current_reading = ""
 
-            # Επιστρέφει την εικόνα καθαρή
+            # Επιστροφή των γραμμάτων στην οθόνη για να ξέρεις τι γίνεται!
+            cv2.rectangle(img, (0, h-70), (w, h), (0, 0, 0), -1)
+            if self.recording:
+                cv2.putText(img, f"READING: {self.current_reading}", (20, h-25), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
+            else:
+                cv2.putText(img, f"WORD: {self.final_word}", (20, h-25), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
+
             return av.VideoFrame.from_ndarray(img, format="bgr24")
 
     voice_choice = st.radio("Φωνή:", ["Female", "Male"], horizontal=True)
@@ -149,30 +160,17 @@ if page == "Recognition Camera":
 
     if ctx.state.playing:
         st_autorefresh(interval=1000, key="camera_refresh") 
-        
         if ctx.video_processor:
             if len(ctx.video_processor.speak_queue) > 0:
                 now = time.time()
-                # Περιμένει όσο διαρκεί η κάθε λέξη
-                if now - st.session_state.last_audio_played >= st.session_state.audio_delay: 
+                # 2.5 δευτερόλεπτα απόσταση (αρκετό για το όνομα, γρήγορο για τα υπόλοιπα)
+                if now - st.session_state.last_audio_played >= 2.5: 
                     word_to_speak = ctx.video_processor.speak_queue.pop(0)
-                    
-                    # Ο έξυπνος χρονομετρητής
-                    durations = {
-                        "KALIMERA": 1.2,
-                        "EFHARISTO": 1.2,
-                        "GEIA": 1.0,
-                        "KALO MESIMERI": 1.8,
-                        "ONOMA": 3.0
-                    }
-                    st.session_state.audio_delay = durations.get(word_to_speak, 1.5)
-                    
-                    # Καλεί ΑΠΕΥΘΕΙΑΣ τη συνάρτηση ήχου που δουλεύει
                     play_local_sound(word_to_speak, voice_choice)
                     st.session_state.last_audio_played = now
 
 # ==========================================
-# 2Η ΣΕΛΙΔΑ: ΑΒΑΤΑΡ
+# 2Η ΣΕΛΙΔΑ: ΑΒΑΤΑΡ (ΚΛΕΙΔΩΜΕΝΟ)
 # ==========================================
 else:
     st.title("🤖 Avatar Voice Mode")
