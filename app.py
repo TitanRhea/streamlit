@@ -189,9 +189,9 @@ if page == "Recognition Camera":
                         "EFHARISTO": 1.7,
                         "GEIA": 1.2,
                         "KALO MESIMERI": 2.2,
-                        "ONOMA": 5.0  # ΕΔΩ ΕΒΑΛΑ ΤΟ 5.0 ΠΟΥ ΖΗΤΗΣΕΣ
+                        "ONOMA": 3.8  # ΕΔΩ ΕΒΑΛΑ ΤΟ 3.8 ΠΟΥ ΖΗΤΗΣΕΣ
                     }
-                    st.session_state.current_audio_delay = durations.get(word_to_speak, 1.7)
+                    st.session_state.current_audio_delay = durations.get(word_to_speak, 2.0)
                     
                     play_local_sound(word_to_speak, voice_choice)
                     st.session_state.last_audio_played = now
