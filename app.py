@@ -1,30 +1,24 @@
 import cv2
 import mediapipe as mp
-import math
 import streamlit as st
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, WebRtcMode
 import av
-import base64
+import numpy as np
 import os
+import pickle
+import base64
 import time
-from streamlit_autorefresh import st_autorefresh
-import streamlit.components.v1 as components
 
 # --- Ρυθμίσεις Σελίδας ---
-st.set_page_config(page_title="SignAI Web Hub", layout="wide")
+st.set_page_config(page_title="SignAI Live", layout="wide")
 
-st.sidebar.title("SignAI Menu 🚀")
-page = st.sidebar.radio("Επίλεξε Λειτουργία:", ["Recognition Camera", "Avatar Voice Mode"])
+MODEL_FILE = "sign_model.pkl"
 
-# --- Session States ---
 if "spoken_word" not in st.session_state:
     st.session_state.spoken_word = ""
-# Η μνήμη που σώζει τον ήχο για να μην κόβεται ποτέ!
-if "active_audio" not in st.session_state:
-    st.session_state.active_audio = ""
 
-# --- Ήχος (ΚΛΕΙΔΩΜΕΝΟΣ) ---
-def play_local_sound(phrase, voice):
+# --- Συνάρτηση Ήχου ---
+def play_local_sound(phrase, voice="Female"):
     gender = voice.lower()
     sound_map = {
         "KALIMERA": "kalimera",
@@ -35,161 +29,66 @@ def play_local_sound(phrase, voice):
     }
     base = sound_map.get(phrase, "")
     if base:
-        filenames = [f"{base}.{gender}.wav"]
-        if phrase == "EFHARISTO":
-            filenames.append(f"efcharisto.{gender}.wav") 
+        filename = f"{base}.{gender}.wav"
+        if os.path.exists(filename):
+            with open(filename, "rb") as f:
+                data = f.read()
+                b64 = base64.b64encode(data).decode()
+                md = f'<audio autoplay="true"><source src="data:audio/wav;base64,{b64}" type="audio/wav"></audio>'
+                st.markdown(md, unsafe_allow_html=True)
+
+# --- AI Video Processor ---
+class AIProcessor(VideoProcessorBase):
+    def __init__(self):
+        self.hands = mp.solutions.hands.Hands(
+            max_num_hands=2,
+            model_complexity=0,
+            min_detection_confidence=0.5
+        )
+        self.model = None
+        if os.path.exists(MODEL_FILE):
+            with open(MODEL_FILE, 'rb') as f:
+                self.model = pickle.load(f)
+        self.last_prediction = ""
+
+    def recv(self, frame):
+        img = frame.to_ndarray(format="bgr24")
+        img = cv2.flip(img, 1)
+        # Χαμηλή ανάλυση για να μην κολλάει το σύμπαν
+        img_small = cv2.resize(img, (320, 240))
+        rgb = cv2.cvtColor(img_small, cv2.COLOR_BGR2RGB)
+        results = self.hands.process(rgb)
+
+        data_row = np.zeros(126).tolist()
+
+        if results.multi_hand_landmarks and self.model:
+            for i, hand_lms in enumerate(results.multi_hand_landmarks):
+                if i >= 2: break
+                start_idx = i * 63
+                for j, lm in enumerate(hand_lms.landmark):
+                    data_row[start_idx + j*3] = lm.x
+                    data_row[start_idx + j*3 + 1] = lm.y
+                    data_row[start_idx + j*3 + 2] = lm.z
             
-        for filename in filenames:
-            if os.path.exists(filename):
-                with open(filename, "rb") as f:
-                    data = f.read()
-                    b64 = base64.b64encode(data).decode()
-                    md = f"""
-                        <div id="audio_{time.time()}">
-                            <audio autoplay="true">
-                                <source src="data:audio/wav;base64,{b64}" type="audio/wav">
-                            </audio>
-                        </div>
-                    """
-                    # Σώζει τον ήχο αντί να τον τυπώνει και να τον χάνει
-                    st.session_state.active_audio = md
-                break
+            try:
+                self.last_prediction = self.model.predict([data_row])[0]
+            except:
+                pass
 
-# ==========================================
-# 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ
-# ==========================================
-if page == "Recognition Camera":
-    st.title("📷 Live Recognition Mode")
-    st.markdown("*(Tip: Κάνε ένα κλικ στη λέξη 'Female' ή 'Male' παρακάτω για να επιτρέψεις στον ήχο να παίξει)*")
-    
-    class SignLanguageProcessor(VideoProcessorBase):
-        def __init__(self):
-            self.hands = mp.solutions.hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.7)
-            self.recording = False
-            self.recording_started_at = 0
-            self.word_candidates = []
-            self.current_word = "" 
+        return av.VideoFrame.from_ndarray(img, format="bgr24")
 
-        def recv(self, frame):
-            img = frame.to_ndarray(format="bgr24")
-            
-            img = cv2.resize(img, (640, 480)) 
-            img = cv2.flip(img, 1)
-            
-            rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            rgb.flags.writeable = False 
-            results = self.hands.process(rgb)
-            rgb.flags.writeable = True
+st.title("📷 SignAI Live Recognition")
+st.write("Το σύστημα χρησιμοποιεί τον εκπαιδευμένο εγκέφαλο από τα βίντεό σου!")
 
-            active_now = None
-            h_cnt = 0
-            palm, idx, moutza = False, False, False
-            h_chin, h_high, h_chest = False, False, False
-            y_index_tip = 1.0
-
-            if results.multi_hand_landmarks:
-                h_cnt = len(results.multi_hand_landmarks)
-                for lm in results.multi_hand_landmarks:
-                    y_wrist = lm.landmark[0].y
-                    if y_wrist < 0.50: h_chin = True 
-                    elif y_wrist < 0.85: h_high = True 
-                    else: h_chest = True
-
-                    up = 0
-                    if lm.landmark[8].y < lm.landmark[6].y: up += 1
-                    if lm.landmark[12].y < lm.landmark[10].y: up += 1
-                    if lm.landmark[16].y < lm.landmark[14].y: up += 1
-                    if lm.landmark[20].y < lm.landmark[18].y: up += 1
-                    
-                    if up >= 3: palm = True
-                    elif up == 1: idx = True
-
-                    dist_thumb_pinky = math.hypot(lm.landmark[4].x - lm.landmark[20].x, lm.landmark[4].y - lm.landmark[20].y)
-                    dist_index_middle = math.hypot(lm.landmark[8].x - lm.landmark[12].x, lm.landmark[8].y - lm.landmark[12].y)
-                    y_index_tip = lm.landmark[8].y
-                    
-                    if palm and dist_thumb_pinky > 0.15 and dist_index_middle > 0.03: 
-                        moutza = True
-
-            if h_cnt == 1 and y_index_tip < 0.65 and not moutza and not idx: active_now = "KALO MESIMERI"
-            elif h_cnt >= 2: active_now = "EFHARISTO"
-            elif moutza: active_now = "GEIA"
-            elif idx and h_high: active_now = "KALIMERA"
-            elif idx and h_chest: active_now = "ONOMA"
-
-            # Καταγραφή
-            if active_now:
-                if not self.recording:
-                    self.recording = True
-                    self.recording_started_at = time.time()
-                    self.word_candidates = [active_now]
-                else:
-                    self.word_candidates.append(active_now)
-            elif self.recording:
-                self.word_candidates.append("NONE")
-
-            if self.recording:
-                if (time.time() - self.recording_started_at) >= 1.5:
-                    if self.word_candidates:
-                        counts = {word: self.word_candidates.count(word) for word in set(self.word_candidates)}
-                        
-                        # ΕΔΩ ΗΤΑΝ ΤΟ ΛΑΘΟΣ (c >= 1 αντί για 3, για να πιάνει τις γρήγορες κινήσεις!)
-                        valid_words = [w for w, c in counts.items() if c >= 1 and w != "NONE"]
-                        
-                        final = "NONE"
-                        if "ONOMA" in valid_words:
-                            final = "ONOMA"
-                        elif "EFHARISTO" in valid_words:
-                            final = "EFHARISTO"
-                        elif "KALIMERA" in valid_words:
-                            final = "KALIMERA"
-                        elif "GEIA" in valid_words:
-                            final = "GEIA"
-                        elif "KALO MESIMERI" in valid_words:
-                            final = "KALO MESIMERI"
-                        
-                        self.current_word = final
-                            
-                    self.recording = False
-                    self.word_candidates = [] 
-
-            return av.VideoFrame.from_ndarray(img, format="bgr24")
-
-    voice_choice = st.radio("Φωνή:", ["Female", "Male"], horizontal=True)
-    
-    ctx = webrtc_streamer(
-        key="sign-camera", 
-        mode=WebRtcMode.SENDRECV, 
-        video_processor_factory=SignLanguageProcessor,
-        async_processing=True 
-    )
-
-    if ctx.state.playing:
-        st_autorefresh(interval=1500, key="camera_refresh") 
-        if ctx.video_processor:
-            current = ctx.video_processor.current_word
-            
-            if current and current != "NONE" and current != st.session_state.spoken_word:
-                play_local_sound(current, voice_choice)
-                st.session_state.spoken_word = current
-                
-            elif current == "NONE":
-                st.session_state.spoken_word = ""
-
-        # ΕΔΩ ΛΥΝΕΤΑΙ ΤΟ ΚΟΨΙΜΟ ΤΟΥ ΗΧΟΥ: Κρατάει το ηχείο αναμμένο σε κάθε ανανέωση!
-        if st.session_state.active_audio != "":
-            st.markdown(st.session_state.active_audio, unsafe_allow_html=True)
-
-# ==========================================
-# 2Η ΣΕΛΙΔΑ: ΑΒΑΤΑΡ
-# ==========================================
+if not os.path.exists(MODEL_FILE):
+    st.error("⚠️ Το αρχείο 'sign_model.pkl' λείπει από τον φάκελο!")
 else:
-    st.title("🤖 Avatar Voice Mode")
-    st.markdown("Πάτα το κουμπί '🎙️ Ενεργοποίηση' και μίλησε στο Άβαταρ!")
+    voice = st.radio("Επίλεξε Φωνή:", ["Female", "Male"], horizontal=True)
+    ctx = webrtc_streamer(key="live", video_processor_factory=AIProcessor)
 
-    URL_TO_GITHUB_PAGES = "https://titanrhea.github.io/avatar-noimatiki/" 
-
-    try:
-        components.iframe(URL_TO_GITHUB_PAGES, width=1200, height=850, scrolling=False)
-    except Exception as e:
-        st.error(f"Σφάλμα φόρτωσης Άβαταρ: {e}")
+    if ctx.video_processor:
+        res = ctx.video_processor.last_prediction
+        if res and res != st.session_state.spoken_word:
+            play_local_sound(res, voice)
+            st.session_state.spoken_word = res
+            time.sleep(1.5)
