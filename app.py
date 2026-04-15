@@ -23,9 +23,6 @@ if "last_audio_played" not in st.session_state:
     st.session_state.last_audio_played = 0
 if "current_audio_delay" not in st.session_state:
     st.session_state.current_audio_delay = 0.0
-# Η νέα μνήμη που κρατάει το ηχείο "ζωντανό" στα refresh!
-if "active_audio" not in st.session_state:
-    st.session_state.active_audio = ""
 
 # --- Ήχος (ΚΛΕΙΔΩΜΕΝΟΣ) ---
 def play_local_sound(phrase, voice):
@@ -55,8 +52,7 @@ def play_local_sound(phrase, voice):
                             </audio>
                         </div>
                     """
-                    # Αντί να το τυπώσει και να χαθεί, το σώζει στη μνήμη!
-                    st.session_state.active_audio = md
+                    st.markdown(md, unsafe_allow_html=True)
                 break
 
 # ==========================================
@@ -121,7 +117,7 @@ if page == "Recognition Camera":
             elif idx and h_high: active_now = "KALIMERA"
             elif idx and h_chest: active_now = "ONOMA"
 
-            # Καταγραφή (Η αυθεντική, δική σου λογική)
+            # Καταγραφή - Η αυθεντική, απλή λογική που πιάνει τέλεια!
             if active_now:
                 if not self.recording:
                     self.recording = True
@@ -129,15 +125,18 @@ if page == "Recognition Camera":
                     self.word_candidates = [active_now]
                 else:
                     self.word_candidates.append(active_now)
+            elif self.recording:
+                self.word_candidates.append("NONE")
 
             if self.recording:
-                # Ο χρόνος καταγραφής (2.5 δευτερόλεπτα) - ΟΠΩΣ ΤΟ ΗΘΕΛΕΣ
+                # Ο χρόνος στα 2.5 δευτερόλεπτα για να έχεις χρόνο να κάνεις το Όνομα
                 if (time.time() - self.recording_started_at) >= 2.5:
                     if self.word_candidates:
-                        # Η αυθεντική, σωστή επιλογή κίνησης
                         final = max(set(self.word_candidates), key=self.word_candidates.count)
-                        self.speak_queue.append(final) # Προσθήκη στην ουρά
+                        if final != "NONE":
+                            self.speak_queue.append(final) 
                     self.recording = False
+                    self.word_candidates = []
 
             # ΚΑΘΑΡΗ ΟΘΟΝΗ!
             return av.VideoFrame.from_ndarray(img, format="bgr24")
@@ -152,14 +151,10 @@ if page == "Recognition Camera":
     )
 
     if ctx.state.playing:
-        st_autorefresh(interval=1000, key="camera_refresh") 
         if ctx.video_processor:
-            # ==========================================
-            # ΕΔΩ ΛΥΝΕΤΑΙ Η ΟΥΡΑ: Ο ΔΥΝΑΜΙΚΟΣ ΧΡΟΝΟΣ
-            # ==========================================
+            # 1. ΠΡΩΤΑ κοιτάμε αν πρέπει να παίξουμε ήχο
             if len(ctx.video_processor.speak_queue) > 0:
                 now = time.time()
-                # Περιμένει όσο του λέει η προηγούμενη λέξη
                 if now - st.session_state.last_audio_played > st.session_state.current_audio_delay: 
                     word_to_speak = ctx.video_processor.speak_queue.pop(0)
                     
@@ -173,13 +168,21 @@ if page == "Recognition Camera":
                     st.session_state.current_audio_delay = durations.get(word_to_speak, 1.5)
                     
                     play_local_sound(word_to_speak, voice_choice)
-                    st.session_state.last_audio_played = now
+                    st.session_state.last_audio_played = time.time()
 
-        # ==========================================
-        # ΑΥΤΟ ΚΡΑΤΑΕΙ ΤΟΝ ΗΧΟ ΖΩΝΤΑΝΟ ΣΤΟ REFRESH!
-        # ==========================================
-        if st.session_state.active_audio != "":
-            st.markdown(st.session_state.active_audio, unsafe_allow_html=True)
+        # 2. ΜΕΤΑ ρυθμίζουμε το Streamlit να μην μας κόψει!
+        now = time.time()
+        time_since_last = now - st.session_state.last_audio_played
+        time_remaining = st.session_state.current_audio_delay - time_since_last
+        
+        if time_remaining > 0:
+            # Αν ο ήχος παίζει ακόμα, λέμε στο Streamlit να περιμένει και ΝΑ ΜΗΝ ΚΑΝΕΙ REFRESH!
+            refresh_interval = int(time_remaining * 1000)
+        else:
+            # Αν δεν παίζει τίποτα, κάνε γρήγορο refresh (κάθε 1 δευτερόλεπτο)
+            refresh_interval = 1000
+            
+        st_autorefresh(interval=refresh_interval, key="camera_refresh")
 
 # ==========================================
 # 2Η ΣΕΛΙΔΑ: ΑΒΑΤΑΡ (ΚΛΕΙΔΩΜΕΝΟ)
