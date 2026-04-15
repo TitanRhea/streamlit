@@ -56,7 +56,7 @@ def play_local_sound(phrase, voice):
                 break
 
 # ==========================================
-# 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ (ΚΑΘΑΡΗ ΟΘΟΝΗ & ΑΥΘΕΝΤΙΚΗ ΑΝΑΓΝΩΡΙΣΗ)
+# 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ (ΚΑΘΑΡΗ ΟΘΟΝΗ & ΙΕΡΑΡΧΙΑ)
 # ==========================================
 if page == "Recognition Camera":
     st.title("📷 Live Recognition Mode")
@@ -117,7 +117,7 @@ if page == "Recognition Camera":
             elif idx and h_high: active_now = "KALIMERA"
             elif idx and h_chest: active_now = "ONOMA"
 
-            # Καταγραφή - Η αυθεντική, απλή λογική που πιάνει τέλεια!
+            # Καταγραφή
             if active_now:
                 if not self.recording:
                     self.recording = True
@@ -126,17 +126,37 @@ if page == "Recognition Camera":
                 else:
                     self.word_candidates.append(active_now)
             elif self.recording:
+                # Αν πέσουν τα χέρια σου, βάζει "NONE" για να μην μπερδευτεί
                 self.word_candidates.append("NONE")
 
             if self.recording:
-                # Ο χρόνος στα 2.5 δευτερόλεπτα για να έχεις χρόνο να κάνεις το Όνομα
+                # 2.5 δευτερόλεπτο χρόνος καταγραφής
                 if (time.time() - self.recording_started_at) >= 2.5:
                     if self.word_candidates:
-                        final = max(set(self.word_candidates), key=self.word_candidates.count)
+                        # --- ΤΟ ΜΥΣΤΙΚΟ: Η ΑΠΟΛΥΤΗ ΙΕΡΑΡΧΙΑ ---
+                        counts = {word: self.word_candidates.count(word) for word in set(self.word_candidates)}
+                        # Φιλτράρουμε το θόρυβο (πρέπει να δει το νόημα για τουλάχιστον 3 καρέ)
+                        valid_words = [w for w, c in counts.items() if c >= 3 and w != "NONE"]
+                        
+                        final = "NONE"
+                        # Εδώ λέμε στην κάμερα: Αν είδες Όνομα, ΚΛΕΙΔΩΣΕ ΤΟ!
+                        if "ONOMA" in valid_words:
+                            final = "ONOMA"
+                        # Αν δεν είδες Όνομα αλλά είδες Ευχαριστώ, ΚΛΕΙΔΩΣΕ ΤΟ (αγνόησε το Γεια)
+                        elif "EFHARISTO" in valid_words:
+                            final = "EFHARISTO"
+                        elif "KALIMERA" in valid_words:
+                            final = "KALIMERA"
+                        elif "GEIA" in valid_words:
+                            final = "GEIA"
+                        elif "KALO MESIMERI" in valid_words:
+                            final = "KALO MESIMERI"
+                        
                         if final != "NONE":
-                            self.speak_queue.append(final) 
+                            self.speak_queue.append(final)
+                            
                     self.recording = False
-                    self.word_candidates = []
+                    self.word_candidates = [] # Καθαρίζει τη μνήμη για το επόμενο νόημα!
 
             # ΚΑΘΑΡΗ ΟΘΟΝΗ!
             return av.VideoFrame.from_ndarray(img, format="bgr24")
@@ -151,38 +171,29 @@ if page == "Recognition Camera":
     )
 
     if ctx.state.playing:
+        st_autorefresh(interval=1000, key="camera_refresh") 
         if ctx.video_processor:
-            # 1. ΠΡΩΤΑ κοιτάμε αν πρέπει να παίξουμε ήχο
+            # ==========================================
+            # ΕΔΩ ΛΥΝΕΤΑΙ Η ΟΥΡΑ: Ο ΔΥΝΑΜΙΚΟΣ ΧΡΟΝΟΣ
+            # ==========================================
             if len(ctx.video_processor.speak_queue) > 0:
                 now = time.time()
+                # Περιμένει όσο του λέει η προηγούμενη λέξη
                 if now - st.session_state.last_audio_played > st.session_state.current_audio_delay: 
                     word_to_speak = ctx.video_processor.speak_queue.pop(0)
                     
+                    # Ορίζει πόσο χρόνο θα δώσει σε αυτή τη λέξη για να ακουστεί ολόκληρη!
                     durations = {
                         "KALIMERA": 1.5,
                         "EFHARISTO": 1.5,
                         "GEIA": 1.2,
                         "KALO MESIMERI": 2.2,
-                        "ONOMA": 4.2  # Τα 4.2 δευτερόλεπτα
+                        "ONOMA": 3.8 
                     }
                     st.session_state.current_audio_delay = durations.get(word_to_speak, 1.5)
                     
                     play_local_sound(word_to_speak, voice_choice)
-                    st.session_state.last_audio_played = time.time()
-
-        # 2. ΜΕΤΑ ρυθμίζουμε το Streamlit να μην μας κόψει!
-        now = time.time()
-        time_since_last = now - st.session_state.last_audio_played
-        time_remaining = st.session_state.current_audio_delay - time_since_last
-        
-        if time_remaining > 0:
-            # Αν ο ήχος παίζει ακόμα, λέμε στο Streamlit να περιμένει και ΝΑ ΜΗΝ ΚΑΝΕΙ REFRESH!
-            refresh_interval = int(time_remaining * 1000)
-        else:
-            # Αν δεν παίζει τίποτα, κάνε γρήγορο refresh (κάθε 1 δευτερόλεπτο)
-            refresh_interval = 1000
-            
-        st_autorefresh(interval=refresh_interval, key="camera_refresh")
+                    st.session_state.last_audio_played = now
 
 # ==========================================
 # 2Η ΣΕΛΙΔΑ: ΑΒΑΤΑΡ (ΚΛΕΙΔΩΜΕΝΟ)
