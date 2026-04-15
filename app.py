@@ -17,9 +17,11 @@ st.sidebar.title("SignAI Menu 🚀")
 page = st.sidebar.radio("Επίλεξε Λειτουργία:", ["Recognition Camera", "Avatar Voice Mode"])
 
 # --- Session States ---
-# (Κρατάμε μόνο το spoken_word, όπως στον 1ο κώδικα που δούλευε)
 if "spoken_word" not in st.session_state:
     st.session_state.spoken_word = ""
+# Η μνήμη που σώζει τον ήχο για να μην κόβεται ποτέ!
+if "active_audio" not in st.session_state:
+    st.session_state.active_audio = ""
 
 # --- Ήχος (ΚΛΕΙΔΩΜΕΝΟΣ) ---
 def play_local_sound(phrase, voice):
@@ -49,11 +51,12 @@ def play_local_sound(phrase, voice):
                             </audio>
                         </div>
                     """
-                    st.markdown(md, unsafe_allow_html=True)
+                    # Σώζει τον ήχο αντί να τον τυπώνει και να τον χάνει
+                    st.session_state.active_audio = md
                 break
 
 # ==========================================
-# 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ (ΚΑΘΑΡΗ ΟΘΟΝΗ & ΙΕΡΑΡΧΙΑ)
+# 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ
 # ==========================================
 if page == "Recognition Camera":
     st.title("📷 Live Recognition Mode")
@@ -65,7 +68,7 @@ if page == "Recognition Camera":
             self.recording = False
             self.recording_started_at = 0
             self.word_candidates = []
-            self.current_word = "" # Αντί για ουρά, χρησιμοποιούμε την απλή λέξη
+            self.current_word = "" 
 
         def recv(self, frame):
             img = frame.to_ndarray(format="bgr24")
@@ -123,16 +126,15 @@ if page == "Recognition Camera":
                 else:
                     self.word_candidates.append(active_now)
             elif self.recording:
-                # Αν πέσουν τα χέρια σου, βάζει "NONE"
                 self.word_candidates.append("NONE")
 
             if self.recording:
-                # 1.5 δευτερόλεπτο χρόνος καταγραφής
                 if (time.time() - self.recording_started_at) >= 1.5:
                     if self.word_candidates:
-                        # --- Η ΑΠΟΛΥΤΗ ΙΕΡΑΡΧΙΑ ΣΟΥ ---
                         counts = {word: self.word_candidates.count(word) for word in set(self.word_candidates)}
-                        valid_words = [w for w, c in counts.items() if c >= 3 and w != "NONE"]
+                        
+                        # ΕΔΩ ΗΤΑΝ ΤΟ ΛΑΘΟΣ (c >= 1 αντί για 3, για να πιάνει τις γρήγορες κινήσεις!)
+                        valid_words = [w for w, c in counts.items() if c >= 1 and w != "NONE"]
                         
                         final = "NONE"
                         if "ONOMA" in valid_words:
@@ -146,13 +148,11 @@ if page == "Recognition Camera":
                         elif "KALO MESIMERI" in valid_words:
                             final = "KALO MESIMERI"
                         
-                        # Σώζουμε τη λέξη στο current_word (αντί για ουρά)
                         self.current_word = final
                             
                     self.recording = False
                     self.word_candidates = [] 
 
-            # ΚΑΘΑΡΗ ΟΘΟΝΗ!
             return av.VideoFrame.from_ndarray(img, format="bgr24")
 
     voice_choice = st.radio("Φωνή:", ["Female", "Male"], horizontal=True)
@@ -164,25 +164,24 @@ if page == "Recognition Camera":
         async_processing=True 
     )
 
-    # ==========================================
-    # Η ΑΠΛΗ, ΤΕΛΕΙΑ ΛΟΓΙΚΗ ΗΧΟΥ ΠΟΥ ΖΗΤΗΣΕΣ
-    # ==========================================
     if ctx.state.playing:
         st_autorefresh(interval=1500, key="camera_refresh") 
         if ctx.video_processor:
             current = ctx.video_processor.current_word
             
-            # Αν υπάρχει λέξη και δεν είναι αυτή που μόλις είπε...
             if current and current != "NONE" and current != st.session_state.spoken_word:
                 play_local_sound(current, voice_choice)
                 st.session_state.spoken_word = current
                 
-            # Αν κατέβασε τα χέρια (NONE), μηδενίζουμε τη μνήμη για να μπορεί να ξαναπεί την ίδια λέξη!
             elif current == "NONE":
                 st.session_state.spoken_word = ""
 
+        # ΕΔΩ ΛΥΝΕΤΑΙ ΤΟ ΚΟΨΙΜΟ ΤΟΥ ΗΧΟΥ: Κρατάει το ηχείο αναμμένο σε κάθε ανανέωση!
+        if st.session_state.active_audio != "":
+            st.markdown(st.session_state.active_audio, unsafe_allow_html=True)
+
 # ==========================================
-# 2Η ΣΕΛΙΔΑ: ΑΒΑΤΑΡ (ΚΛΕΙΔΩΜΕΝΟ)
+# 2Η ΣΕΛΙΔΑ: ΑΒΑΤΑΡ
 # ==========================================
 else:
     st.title("🤖 Avatar Voice Mode")
