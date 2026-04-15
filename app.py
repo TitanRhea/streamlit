@@ -135,8 +135,9 @@ if page == "Recognition Camera":
                     if self.word_candidates:
                         # --- ΤΟ ΜΥΣΤΙΚΟ: Η ΑΠΟΛΥΤΗ ΙΕΡΑΡΧΙΑ ---
                         counts = {word: self.word_candidates.count(word) for word in set(self.word_candidates)}
-                        # Φιλτράρουμε το θόρυβο (πρέπει να δει το νόημα για τουλάχιστον 3 καρέ)
-                        valid_words = [w for w, c in counts.items() if c >= 3 and w != "NONE"]
+                        
+                        # ΕΔΩ ΗΤΑΝ ΤΟ ΛΑΘΟΣ (το c >= 3). Το έκανα c >= 1 !
+                        valid_words = [w for w, c in counts.items() if c >= 1 and w != "NONE"]
                         
                         final = "NONE"
                         # Εδώ λέμε στην κάμερα: Αν είδες Όνομα, ΚΛΕΙΔΩΣΕ ΤΟ!
@@ -188,7 +189,7 @@ if page == "Recognition Camera":
                         "EFHARISTO": 1.5,
                         "GEIA": 1.2,
                         "KALO MESIMERI": 2.2,
-                        "ONOMA": 3.8 
+                        "ONOMA": 4.2  # ΕΔΩ ΕΒΑΛΑ ΤΟ 4.2 ΠΟΥ ΖΗΤΗΣΕΣ
                     }
                     st.session_state.current_audio_delay = durations.get(word_to_speak, 1.5)
                     
