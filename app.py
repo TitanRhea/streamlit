@@ -23,6 +23,9 @@ if "last_audio_played" not in st.session_state:
     st.session_state.last_audio_played = 0
 if "current_audio_delay" not in st.session_state:
     st.session_state.current_audio_delay = 0.0
+# Η νέα μνήμη που κρατάει το ηχείο "ζωντανό" στα refresh!
+if "active_audio" not in st.session_state:
+    st.session_state.active_audio = ""
 
 # --- Ήχος (ΚΛΕΙΔΩΜΕΝΟΣ) ---
 def play_local_sound(phrase, voice):
@@ -52,7 +55,8 @@ def play_local_sound(phrase, voice):
                             </audio>
                         </div>
                     """
-                    st.markdown(md, unsafe_allow_html=True)
+                    # Αντί να το τυπώσει και να χαθεί, το σώζει στη μνήμη!
+                    st.session_state.active_audio = md
                 break
 
 # ==========================================
@@ -133,17 +137,14 @@ if page == "Recognition Camera":
                 # 1.5 δευτερόλεπτο χρόνος καταγραφής
                 if (time.time() - self.recording_started_at) >= 1.5:
                     if self.word_candidates:
-                        # --- ΤΟ ΜΥΣΤΙΚΟ: Η ΑΠΟΛΥΤΗ ΙΕΡΑΡΧΙΑ ---
                         counts = {word: self.word_candidates.count(word) for word in set(self.word_candidates)}
                         
-                        # ΕΔΩ ΗΤΑΝ ΤΟ ΛΑΘΟΣ (το c >= 3). Το έκανα c >= 1 !
+                        # Το c >= 1 για να δουλεύει άψογα ακόμα και με κακό ίντερνετ
                         valid_words = [w for w, c in counts.items() if c >= 1 and w != "NONE"]
                         
                         final = "NONE"
-                        # Εδώ λέμε στην κάμερα: Αν είδες Όνομα, ΚΛΕΙΔΩΣΕ ΤΟ!
                         if "ONOMA" in valid_words:
                             final = "ONOMA"
-                        # Αν δεν είδες Όνομα αλλά είδες Ευχαριστώ, ΚΛΕΙΔΩΣΕ ΤΟ (αγνόησε το Γεια)
                         elif "EFHARISTO" in valid_words:
                             final = "EFHARISTO"
                         elif "KALIMERA" in valid_words:
@@ -157,7 +158,7 @@ if page == "Recognition Camera":
                             self.speak_queue.append(final)
                             
                     self.recording = False
-                    self.word_candidates = [] # Καθαρίζει τη μνήμη για το επόμενο νόημα!
+                    self.word_candidates = [] 
 
             # ΚΑΘΑΡΗ ΟΘΟΝΗ!
             return av.VideoFrame.from_ndarray(img, format="bgr24")
@@ -186,15 +187,21 @@ if page == "Recognition Camera":
                     # Ορίζει πόσο χρόνο θα δώσει σε αυτή τη λέξη για να ακουστεί ολόκληρη!
                     durations = {
                         "KALIMERA": 1.5,
-                        "EFHARISTO": 1.7,
+                        "EFHARISTO": 1.5,
                         "GEIA": 1.2,
                         "KALO MESIMERI": 2.2,
-                        "ONOMA": 3.8  # ΕΔΩ ΕΒΑΛΑ ΤΟ 3.8 ΠΟΥ ΖΗΤΗΣΕΣ
+                        "ONOMA": 4.2  
                     }
-                    st.session_state.current_audio_delay = durations.get(word_to_speak, 2.0)
+                    st.session_state.current_audio_delay = durations.get(word_to_speak, 1.5)
                     
                     play_local_sound(word_to_speak, voice_choice)
                     st.session_state.last_audio_played = now
+
+        # ==========================================
+        # ΑΥΤΟ ΚΡΑΤΑΕΙ ΤΟΝ ΗΧΟ ΖΩΝΤΑΝΟ ΣΤΟ REFRESH!
+        # ==========================================
+        if st.session_state.active_audio != "":
+            st.markdown(st.session_state.active_audio, unsafe_allow_html=True)
 
 # ==========================================
 # 2Η ΣΕΛΙΔΑ: ΑΒΑΤΑΡ (ΚΛΕΙΔΩΜΕΝΟ)
