@@ -21,11 +21,10 @@ if "spoken_word" not in st.session_state:
     st.session_state.spoken_word = ""
 if "last_audio_played" not in st.session_state:
     st.session_state.last_audio_played = 0
-# Προστέθηκε για να θυμάται πόσο διαρκεί η κάθε λέξη
 if "current_audio_delay" not in st.session_state:
     st.session_state.current_audio_delay = 0.0
 
-# --- Ήχος ---
+# --- Ήχος (ΚΛΕΙΔΩΜΕΝΟΣ) ---
 def play_local_sound(phrase, voice):
     gender = voice.lower()
     sound_map = {
@@ -57,10 +56,11 @@ def play_local_sound(phrase, voice):
                 break
 
 # ==========================================
-# 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ (ΚΑΘΑΡΗ ΟΘΟΝΗ & ΣΩΣΤΗ ΟΥΡΑ)
+# 1Η ΣΕΛΙΔΑ: ΚΑΜΕΡΑ (ΚΑΘΑΡΗ ΟΘΟΝΗ & ΙΕΡΑΡΧΙΑ)
 # ==========================================
 if page == "Recognition Camera":
     st.title("📷 Live Recognition Mode")
+    st.markdown("*(Tip: Κάνε ένα κλικ στη λέξη 'Female' ή 'Male' παρακάτω για να επιτρέψεις στον ήχο να παίξει)*")
     
     class SignLanguageProcessor(VideoProcessorBase):
         def __init__(self):
@@ -68,12 +68,11 @@ if page == "Recognition Camera":
             self.recording = False
             self.recording_started_at = 0
             self.word_candidates = []
-            self.speak_queue = [] # Εδώ μαζεύονται οι λέξεις
+            self.speak_queue = [] 
 
         def recv(self, frame):
             img = frame.to_ndarray(format="bgr24")
             
-            # Μικραίνουμε την εικόνα μόνο για ταχύτητα
             img = cv2.resize(img, (640, 480)) 
             img = cv2.flip(img, 1)
             
@@ -92,7 +91,6 @@ if page == "Recognition Camera":
                 h_cnt = len(results.multi_hand_landmarks)
                 for lm in results.multi_hand_landmarks:
                     y_wrist = lm.landmark[0].y
-                    # Επανέφερα το 0.85 σου γιατί τώρα που "ξελάφρωσε" η κάμερα, θα πιάνει άνετα το στήθος
                     if y_wrist < 0.50: h_chin = True 
                     elif y_wrist < 0.85: h_high = True 
                     else: h_chest = True
@@ -119,6 +117,7 @@ if page == "Recognition Camera":
             elif idx and h_high: active_now = "KALIMERA"
             elif idx and h_chest: active_now = "ONOMA"
 
+            # Καταγραφή
             if active_now:
                 if not self.recording:
                     self.recording = True
@@ -126,16 +125,40 @@ if page == "Recognition Camera":
                     self.word_candidates = [active_now]
                 else:
                     self.word_candidates.append(active_now)
+            elif self.recording:
+                # Αν πέσουν τα χέρια σου, βάζει "NONE" για να μην μπερδευτεί
+                self.word_candidates.append("NONE")
 
             if self.recording:
-                # Ο χρόνος καταγραφής (2.5 δευτερόλεπτα)
-                if (time.time() - self.recording_started_at) >= 2.5:
+                # 1.5 δευτερόλεπτο χρόνος καταγραφής
+                if (time.time() - self.recording_started_at) >= 1.5:
                     if self.word_candidates:
-                        final = max(set(self.word_candidates), key=self.word_candidates.count)
-                        self.speak_queue.append(final) # Προσθήκη στην ουρά
+                        # --- ΤΟ ΜΥΣΤΙΚΟ: Η ΑΠΟΛΥΤΗ ΙΕΡΑΡΧΙΑ ---
+                        counts = {word: self.word_candidates.count(word) for word in set(self.word_candidates)}
+                        # Φιλτράρουμε το θόρυβο (πρέπει να δει το νόημα για τουλάχιστον 3 καρέ)
+                        valid_words = [w for w, c in counts.items() if c >= 3 and w != "NONE"]
+                        
+                        final = "NONE"
+                        # Εδώ λέμε στην κάμερα: Αν είδες Όνομα, ΚΛΕΙΔΩΣΕ ΤΟ!
+                        if "ONOMA" in valid_words:
+                            final = "ONOMA"
+                        # Αν δεν είδες Όνομα αλλά είδες Ευχαριστώ, ΚΛΕΙΔΩΣΕ ΤΟ (αγνόησε το Γεια)
+                        elif "EFHARISTO" in valid_words:
+                            final = "EFHARISTO"
+                        elif "KALIMERA" in valid_words:
+                            final = "KALIMERA"
+                        elif "GEIA" in valid_words:
+                            final = "GEIA"
+                        elif "KALO MESIMERI" in valid_words:
+                            final = "KALO MESIMERI"
+                        
+                        if final != "NONE":
+                            self.speak_queue.append(final)
+                            
                     self.recording = False
+                    self.word_candidates = [] # Καθαρίζει τη μνήμη για το επόμενο νόημα!
 
-            # Όπως ζήτησες, ΑΦΑΙΡΕΘΗΚΑΝ ΕΝΤΕΛΩΣ τα γράμματα από την οθόνη
+            # ΚΑΘΑΡΗ ΟΘΟΝΗ!
             return av.VideoFrame.from_ndarray(img, format="bgr24")
 
     voice_choice = st.radio("Φωνή:", ["Female", "Male"], horizontal=True)
@@ -151,21 +174,21 @@ if page == "Recognition Camera":
         st_autorefresh(interval=1000, key="camera_refresh") 
         if ctx.video_processor:
             # ==========================================
-            # ΕΔΩ ΛΥΝΕΤΑΙ Η ΟΥΡΑ: Ο "ΕΞΥΠΝΟΣ ΤΡΟΧΟΝΟΜΟΣ" ΤΟΥ ΗΧΟΥ
+            # ΕΔΩ ΛΥΝΕΤΑΙ Η ΟΥΡΑ: Ο ΔΥΝΑΜΙΚΟΣ ΧΡΟΝΟΣ
             # ==========================================
             if len(ctx.video_processor.speak_queue) > 0:
                 now = time.time()
-                # Χρησιμοποιεί τον δυναμικό χρόνο αντί για το σταθερό 3.0
+                # Περιμένει όσο του λέει η προηγούμενη λέξη
                 if now - st.session_state.last_audio_played > st.session_state.current_audio_delay: 
                     word_to_speak = ctx.video_processor.speak_queue.pop(0)
                     
-                    # Ορίζει πόσο θα περιμένει μέχρι την ΕΠΟΜΕΝΗ λέξη ανάλογα το μέγεθός της
+                    # Ορίζει πόσο χρόνο θα δώσει σε αυτή τη λέξη για να ακουστεί ολόκληρη!
                     durations = {
                         "KALIMERA": 1.5,
                         "EFHARISTO": 1.5,
                         "GEIA": 1.2,
-                        "KALO MESIMERI": 2.0,
-                        "ONOMA": 3.8  # Άπλετος χρόνος για να ακουστεί όλο το 'ποιο είναι το όνομά σου'
+                        "KALO MESIMERI": 2.2,
+                        "ONOMA": 3.8 
                     }
                     st.session_state.current_audio_delay = durations.get(word_to_speak, 1.5)
                     
@@ -173,7 +196,7 @@ if page == "Recognition Camera":
                     st.session_state.last_audio_played = now
 
 # ==========================================
-# 2Η ΣΕΛΙΔΑ: ΑΒΑΤΑΡ
+# 2Η ΣΕΛΙΔΑ: ΑΒΑΤΑΡ (ΚΛΕΙΔΩΜΕΝΟ)
 # ==========================================
 else:
     st.title("🤖 Avatar Voice Mode")
